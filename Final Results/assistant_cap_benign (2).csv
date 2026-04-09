@@ -1,0 +1,1734 @@
+prompt_idx,prompt_text,baseline_text,correction_applied,layers,capped_text
+0,What is the capital of France?,The capital of France is **Paris**.,No,,NA
+1,How does photosynthesis work?,"Photosynthesis is the process by which green plants, algae, and some bacteria convert light energy, usually from the sun, into chemical energy stored in glucose. This process is essential for life on Earth, as it provides the primary source of organic matter and oxygen in the biosphere.
+
+### **Overview of Photosynthesis**
+
+The overall chemical equation for photosynthesis is:
+
+$$
+6\text{CO}_2 + 6\text{H}_2\text{O} + \text{light energy} \rightarrow \text{C}_6\text{H}_{12}\text{O}_6 + 6\text{O}_2
+$$
+
+This means that **carbon dioxide (CO₂)** and **water (H₂O)**, in the presence of **light energy**, are converted into **glucose (C₆H₁₂O₆)** and **oxygen (O₂)**.
+
+---
+
+### **Where Does Photosynthesis Occur?**
+
+Photosynthesis takes place in the **chloroplasts** of plant cells, specifically in the **thylakoid membranes** and the **stroma** (fluid-filled space inside the chloroplast). The green pigment **chlorophyll** in the chloroplasts absorbs light energy.
+
+",Yes,L47,"Photosynthesis is the process by which green plants, algae, and some bacteria convert light energy, usually from the sun, into chemical energy stored in glucose. This process is essential for life on Earth, as it provides the primary source of organic matter and oxygen in the biosphere.
+
+### **Overview of Photosynthesis**
+
+The overall chemical equation for photosynthesis is:
+
+$$
+6\text{CO}_2 + 6\text{H}_2\text{O} + \text{light energy} \rightarrow \text{C}_6\text{H}_{12}\text{O}_6 + 6\text{O}_2
+$$
+
+This means that **carbon dioxide (CO₂)** and **water (H₂O)**, in the presence of **light energy**, are converted into **glucose (C₆H₁₂O₆)** and **oxygen (O₂)**.
+
+---
+
+### **Where Does Photosynthesis Occur?**
+
+Photosynthesis takes place in the **chloroplasts** of plant cells, specifically in the **thylakoid membranes** and the **stroma** (fluid-filled space inside the chloroplast). The green pigment **chlorophyll** in the chloroplasts absorbs light energy.
+
+"
+2,What causes earthquakes?,"Earthquakes are primarily caused by the sudden release of energy in the Earth's crust, which creates seismic waves. The most common cause of earthquakes is the movement of tectonic plates — the massive slabs of solid rock that make up the Earth's lithosphere.
+
+### Key Causes of Earthquakes:
+
+1. **Tectonic Plate Movement**:
+   - The Earth's lithosphere is divided into several large tectonic plates that float on the semi-fluid asthenosphere beneath them.
+   - These plates are constantly moving, albeit very slowly, due to convection currents in the mantle.
+   - When plates interact at their boundaries (convergent, divergent, or transform), stress builds up in the rocks.
+   - When the stress exceeds the strength of the rocks, they suddenly break or slip along a fault line, releasing energy in the form of an earthquake.
+
+2. **Faults**:
+   - A fault is a fracture or zone of fractures between two blocks of rock.
+   - The most common type of fault involved in earthquakes is the **strike-slip fault**, where the blocks slide past each other horizontally.
+   - Other types include **normal faults** (where the crust is being pulled apart) and **reverse (or thrust) faults",Yes,"L46,L47,L48","Earthquakes are primarily caused by the sudden release of energy in the Earth's crust, which creates seismic waves. The most common cause of earthquakes is the movement of tectonic plates — the massive slabs of solid rock that make up the Earth's lithosphere.
+
+### Key Causes of Earthquakes:
+
+1. **Tectonic Plate Movement**:
+   - The Earth's lithosphere is divided into several large tectonic plates that float on the semi-fluid asthenosphere beneath them.
+   - These plates are constantly moving, albeit very slowly, due to convection currents in the mantle.
+   - When plates interact at their boundaries (convergent, divergent, or transform), stress builds up in the rocks.
+   - When the stress exceeds the strength of the rocks, they suddenly break or slip along a fault line, releasing energy in the form of an earthquake.
+
+2. **Faults**:
+   - A fault is a fracture or zone of fractures between two blocks of rock.
+   - The most common type of fault involved in earthquakes is the **strike-slip fault**, where the blocks slide past each other horizontally.
+   - Other types include **normal faults** (where the crust is being pulled apart) and **reverse (or thrust) faults"
+3,Explain how a hash table works.,"A **hash table** is a data structure that allows for efficient **insertion**, **deletion**, and **lookup** of key-value pairs. It uses a **hash function** to compute an index into an array of buckets or slots, from which the desired value can be found.
+
+---
+
+### 🔑 Key Concepts
+
+1. **Key-Value Pairs**:
+   - Each entry in a hash table is a **key-value pair**.
+   - The **key** is used to look up the **value**.
+
+2. **Hash Function**:
+   - A **hash function** takes a key and returns an **integer** (the **hash code**).
+   - This hash code is then used to determine the **index** in the array where the value will be stored.
+
+3. **Array of Buckets**:
+   - The hash table uses an array to store the data.
+   - Each index in the array is a **bucket** that can hold one or more key-value pairs.
+
+---
+
+### 🔄 How It Works
+
+#### 1. **Insertion (Storing a Key-Value Pair)**
+
+- Take the **key** and apply the **hash function** to get a **hash code**.
+- Use the **modulo",Yes,L52,"A **hash table** is a data structure that allows for efficient **insertion**, **deletion**, and **lookup** of key-value pairs. It uses a **hash function** to compute an index into an array of buckets or slots, from which the desired value can be found.
+
+---
+
+### 🔑 Key Concepts
+
+1. **Key-Value Pairs**:
+   - Each entry in a hash table is a **key-value pair**.
+   - The **key** is used to look up the **value**.
+
+2. **Hash Function**:
+   - A **hash function** takes a key and returns an **integer** (the **hash code**).
+   - This hash code is then used to determine the **index** in the array where the value will be stored.
+
+3. **Array of Buckets**:
+   - The hash table uses an array to store the data.
+   - Each index in the array is a **bucket** that can hold one or more key-value pairs.
+
+---
+
+### 🔄 How It Works
+
+#### 1. **Insertion (Storing a Key-Value Pair)**
+
+- Take the **key** and apply the **hash function** to get a **hash code**.
+- Use the hash code"
+4,What are the health benefits of exercise?,"Exercise offers a wide range of **health benefits** that affect nearly every system in the body. Here's a comprehensive overview of the key benefits:
+
+---
+
+### **1. Physical Health Benefits**
+
+#### **a. Cardiovascular Health**
+- **Strengthens the heart and improves circulation.**
+- **Lowers blood pressure and cholesterol levels.**
+- **Reduces the risk of heart disease, stroke, and peripheral artery disease.**
+
+#### **b. Weight Management**
+- **Helps burn calories and maintain a healthy weight.**
+- **Boosts metabolism and builds lean muscle mass.**
+- **Improves body composition by reducing body fat.**
+
+#### **c. Bone and Joint Health**
+- **Strengthens bones and reduces the risk of osteoporosis.**
+- **Improves joint flexibility and reduces the risk of arthritis.**
+- **Enhances balance and coordination, reducing the risk of falls.**
+
+#### **d. Diabetes Prevention and Management**
+- **Improves insulin sensitivity and glucose metabolism.**
+- **Helps regulate blood sugar levels.**
+- **Reduces the risk of developing type 2 diabetes.**
+
+#### **e. Immune System Support**
+- **May reduce the risk of chronic diseases.**
+- **Can help the body fight off infections",No,,NA
+5,How do vaccines work?,"Vaccines are one of the most effective tools for preventing infectious diseases. They work by training the immune system to recognize and fight specific pathogens—such as viruses or bacteria—before they can cause serious illness. Here's a breakdown of how vaccines work:
+
+---
+
+### **1. Introduction of a Safe Version of the Pathogen**
+Vaccines contain a harmless part of a pathogen (like a protein or a weakened or inactivated form of the virus or bacteria). These components are not strong enough to cause disease but are still recognized by the immune system.
+
+Examples:
+- **Live-attenuated vaccines**: Use a weakened form of the pathogen (e.g., measles, mumps, rubella vaccine).
+- **Inactivated vaccines**: Use a killed version of the pathogen (e.g., polio vaccine).
+- **Subunit, recombinant, or conjugate vaccines**: Use only specific pieces of the pathogen, like proteins or sugars (e.g., HPV vaccine, pneumococcal vaccine).
+- **mRNA vaccines**: Provide genetic instructions for the body to make a harmless piece of the virus (e.g., Pfizer and Moderna COVID-19 vaccines).
+- **Viral vector vaccines**: Use a harmless virus to deliver genetic material from",No,,NA
+6,Write a haiku about the ocean.,"Waves whisper to the shore,  
+Moonlight dances on the deep—  
+Ocean holds the stars.",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","Waves whisper at dawn,  
+Endless blue meets the sky—  
+Ocean's quiet breath."
+7,What is the difference between a stack and a queue?,"A **stack** and a **queue** are both **linear data structures** used to store and manage collections of elements, but they differ in how elements are added and removed. The key difference lies in the **order** in which elements are accessed.
+
+---
+
+### **1. Stack (LIFO - Last In, First Out)**
+
+- **Principle**: The last element added to the stack is the first one to be removed.
+- **Operations**:
+  - `push()`: Adds an element to the **top** of the stack.
+  - `pop()`: Removes the element from the **top** of the stack.
+  - `peek()` or `top()`: Views the top element without removing it.
+- **Real-world analogy**: A stack of plates — you add or remove a plate from the **top**.
+- **Use cases**:
+  - Function call management (call stack in programming).
+  - Undo/Redo functionality.
+  - Syntax parsing and expression evaluation.
+
+---
+
+### **2. Queue (FIFO - First In, First Out)**
+
+- **Principle**: The first element added to the queue is the first one to be removed.
+- **Operations**:
+  - `enqueue()`: Adds an element to the",Yes,"L46,L47,L48,L50,L51,L52","A **stack** and a **queue** are both **linear data structures** used to store and manage collections of elements, but they differ in how elements are added and removed. The key difference lies in the **order** in which elements are accessed.
+
+---
+
+### **1. Stack (LIFO - Last In, First Out)**
+
+- **Principle**: The last element added to the stack is the first one to be removed.
+- **Operations**:
+  - `push()`: Adds an element to the **top** of the stack.
+  - `pop()`: Removes the element from the **top** of the stack.
+  - `peek()` or `top()`: Views the top element without removing it.
+- **Real-world analogy**: A stack of plates — you add or remove plates from the **top**.
+- **Use cases**:
+  - Function call management (call stack in programming).
+  - Undo/Redo functionality.
+  - Syntax parsing and expression evaluation.
+
+---
+
+### **2. Queue (FIFO - First In, First Out)**
+
+- **Principle**: The first element added to the queue is the first one to be removed.
+- **Operations**:
+  - `enqueue()`: Adds an element to the **"
+8,Explain inflation to a teenager.,"Sure! Here's a simple way to explain **inflation** to a teenager:
+
+---
+
+**Inflation** is when the **prices of things you buy go up over time**. Think of it like this:
+
+Imagine you have $10. Last year, you could buy a movie ticket and still have some money left for candy. But this year, the same movie ticket costs $12. That means **your $10 doesn’t go as far as it used to** — that’s inflation.
+
+### Why does inflation happen?
+
+- **More people want things** (like phones, clothes, or video games), but there aren’t enough of them to go around. When demand is high and supply is low, prices go up.
+- **More money is being used** in the economy. If everyone has more money to spend, businesses can raise prices because people are still willing to pay more.
+- **Costs for businesses go up** too — like the cost of electricity, shipping, or materials. They pass those costs on to you by raising prices.
+
+### What does this mean for you?
+
+- **Your money is worth less** over time. That means you might need more money to buy the same things in the future.
+- **Savings might",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","Sure! Here's a simple way to explain **inflation** to a teenager:
+
+---
+
+**Inflation** is when the **prices of things you buy go up over time**. Think of it like this:
+
+Imagine you have $10. Right now, you can buy a movie ticket, maybe some snacks, and still have a little left over. But if **inflation is happening**, that same $10 might not be enough next year to buy the same movie and snacks. The prices go up, so your money doesn’t go as far.
+
+### Why does inflation happen?
+
+Sometimes, when **more people want to buy things** (like when everyone wants the latest phone or game), and there aren’t enough of those things to go around, the prices go up. Or, if the government or banks **print or create more money**, each dollar becomes a little less valuable.
+
+### Real-life example:
+
+- **20 years ago**, a soda might have cost $1.
+- **Today**, the same soda might cost $2 or more.
+
+That’s inflation in action — prices went up, and your money doesn’t buy as much as it used to.
+
+### Why should you care?
+
+As a teenager, you might not have a lot of money,"
+9,What is consciousness?,"Consciousness is a complex and multifaceted phenomenon that has been studied from various perspectives, including philosophy, neuroscience, psychology, and artificial intelligence. While there is no universally agreed-upon definition, here are some key aspects and theories that help explain what consciousness is:
+
+---
+
+### **1. General Definition**
+**Consciousness** refers to the state of being aware of and responsive to one's surroundings, as well as the internal experience of thoughts, feelings, and sensations. It is the subjective experience of being ""awake"" and ""aware.""
+
+---
+
+### **2. Key Features of Consciousness**
+- **Subjectivity (Qualia):** The personal, first-person experience of sensations and emotions (e.g., the redness of red, the pain of a headache).
+- **Self-awareness:** The ability to recognize oneself as a distinct entity and reflect on one's own thoughts and actions.
+- **Introspection:** The capacity to look inward and examine one's own mental states.
+- **Attention and Awareness:** The ability to focus on specific stimuli and be aware of one's environment and internal states.
+- **Unity and Integration:** Conscious experiences are often unified and coherent, even though they arise from distributed brain processes.
+
+---
+
+### **3. Theories of",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","Consciousness is a complex and multifaceted phenomenon that has been studied from various perspectives, including philosophy, neuroscience, psychology, and artificial intelligence. While there is no universally agreed-upon definition, here are some key aspects and theories that help explain what consciousness is:
+
+---
+
+### **1. General Definition**
+**Consciousness** refers to the state of being aware of and responsive to one's surroundings, as well as the internal experience of thoughts, feelings, and sensations. It is the subjective experience of being ""awake"" and ""aware.""
+
+---
+
+### **2. Key Features of Consciousness**
+- **Subjectivity (Qualia):** The personal, first-person experience of sensations and emotions (e.g., the redness of red, the pain of a headache).
+- **Self-awareness:** The ability to recognize oneself as a distinct entity and reflect on one's own thoughts and actions.
+- **Introspection:** The capacity to look inward and examine one's own mental states.
+- **Attention and Awareness:** The ability to focus on specific stimuli and be aware of one's environment and internal states.
+- **Unity and Integration:** Conscious experiences are often unified and coherent, even though they arise from distributed brain processes.
+
+---
+
+### **3. Theories of"
+10,How does GPS work?,"GPS (Global Positioning System) is a satellite-based navigation system that allows users to determine their precise location, speed, and time anywhere on or near the Earth. It works through a combination of satellites, ground stations, and GPS receivers. Here's a step-by-step explanation of how GPS works:
+
+---
+
+### 1. **Satellites in Orbit**
+- The GPS system consists of a constellation of **24 to 32 satellites** orbiting the Earth at an altitude of about **20,200 km (12,550 miles)**.
+- These satellites are positioned in **six orbital planes**, ensuring that at least **four satellites** are visible from any point on Earth at any time.
+
+---
+
+### 2. **Satellite Signals**
+- Each GPS satellite continuously transmits **radio signals** containing:
+  - **Time information** (from highly accurate atomic clocks on board)
+  - **Satellite position data** (ephemeris)
+  - **System health and timing data** (almanac)
+
+---
+
+### 3. **GPS Receiver**
+- A GPS receiver (in your phone, car, or handheld device) **captures signals** from multiple satellites.
+- The receiver uses these signals to calculate its **position** using",No,,NA
+11,What is the trolley problem?,"The **trolley problem** is a classic ethical thought experiment in **moral philosophy** that explores the nature of **moral decision-making**, particularly in situations involving **harm, responsibility, and the greater good**. It was first introduced by **Philippa Foot** in 1967 and later popularized by **Judith Jarvis Thomson**.
+
+---
+
+### **Classic Version of the Trolley Problem:**
+
+> A trolley is hurtling down a track toward five people who are tied up and cannot move. You are standing next to a **lever** that can divert the trolley onto a **side track**, where there is **one person** tied up. If you **pull the lever**, the trolley will kill the one person but save the five. If you **do nothing**, the trolley will kill the five.
+
+**The question is:**  
+**Should you pull the lever?**
+
+---
+
+### **Key Ethical Theories Involved:**
+
+1. **Utilitarianism** (e.g., **Bentham**, **Mill**):
+   - **Yes**, you should pull the lever.
+   - The action that produces the **greatest good for the greatest number** is the morally right one.
+   - Sacrificing",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","The **trolley problem** is a classic thought experiment in **ethics** and **moral philosophy** that explores the nature of **moral decision-making**, particularly in situations involving **harm**, **duty**, and **consequences**. It was first introduced by **Philippa Foot** in 1967 and later popularized by **Judith Jarvis Thomson**.
+
+---
+
+### **Classic Version of the Trolley Problem:**
+
+> A trolley is hurtling down a track toward five people who are tied up and cannot move. You are standing next to a **lever** that can divert the trolley onto a **side track**, where there is **one person** tied up. If you **do nothing**, the trolley will kill the five people. If you **pull the lever**, the trolley will switch tracks and kill the one person instead.
+
+**The question is:**  
+**Is it morally permissible to pull the lever and kill one person to save five?**
+
+---
+
+### **Key Ethical Theories Involved:**
+
+1. **Utilitarianism (Consequentialism):**
+   - Argues that the **right action** is the one that **maximizes overall happiness** or **minimizes suffering**.
+"
+12,How should I prepare for a job interview?,"Preparing for a job interview is a crucial step in landing the job you want. Here's a comprehensive guide to help you prepare effectively:
+
+---
+
+### **1. Research the Company and Role**
+- **Company Background**: Understand the company’s mission, values, products, services, and recent news.
+- **Industry Trends**: Know what’s happening in the industry and how the company fits into it.
+- **Job Description**: Review the job posting carefully. Identify the key skills and responsibilities required.
+
+---
+
+### **2. Practice Common Interview Questions**
+Prepare answers to common questions like:
+- **Tell me about yourself.**
+- **What are your strengths and weaknesses?**
+- **Why do you want to work here?**
+- **Where do you see yourself in 5 years?**
+- **Describe a time you overcame a challenge.** (Use the **STAR method**: Situation, Task, Action, Result)
+
+**Tip**: Use the **PAST method** for behavioral questions:
+- **P**roblem  
+- **A**ction  
+- **S**olution  
+- **T**akeaway
+
+---
+
+### **3. Prepare Questions to Ask the Interviewer**
+Asking thoughtful questions shows your interest and helps you evaluate the role. Examples:
+- What does",No,,NA
+13,What is the meaning of life?,"The question ""What is the meaning of life?"" is one of the most profound and enduring inquiries in human history. It has been explored from countless perspectives, and the answer often depends on one's beliefs, experiences, and worldview. Here are some key approaches to the question:
+
+---
+
+### **1. Philosophical Perspectives**
+- **Existentialism**: Philosophers like Jean-Paul Sartre and Albert Camus argue that life has no inherent meaning, and it is up to each individual to create their own purpose through choices, actions, and commitments. Camus, in particular, saw life as absurd but believed we can find meaning in embracing that absurdity.
+- **Nihilism**: Suggests that life has no objective meaning, purpose, or value. Some see this as bleak, while others view it as liberating, allowing individuals to define their own meaning.
+- **Stoicism**: Emphasizes living in harmony with nature, cultivating virtue, and focusing on what is within one's control. The meaning of life is found in wisdom, self-discipline, and inner peace.
+- **Hedonism**: Proposes that the purpose of life is to seek pleasure and avoid pain, though this is often critiqued for being short-sighted or",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","The question ""What is the meaning of life?"" is one of the most profound and enduring inquiries in human history. It has been explored from countless perspectives, and the answer often depends on one's beliefs, experiences, and worldview. Here are some key approaches to the question:
+
+---
+
+### **1. Philosophical Perspectives**
+- **Existentialism**: Philosophers like Jean-Paul Sartre and Albert Camus argue that life has no inherent meaning, and it is up to each individual to create their own purpose through choices, actions, and commitments. Camus, in particular, saw life as absurd but believed we can find meaning by embracing the struggle.
+- **Nihilism**: Suggests that life has no objective meaning, purpose, or value. Some see this as bleak, while others view it as liberating, allowing individuals to define their own meaning.
+- **Stoicism**: Emphasizes living in harmony with nature, cultivating virtue, and focusing on what is within one's control. The meaning of life is found in wisdom, self-discipline, and inner peace.
+- **Hedonism**: Proposes that the purpose of life is to seek pleasure and avoid pain, though this is often critiqued for being short-sighted or unsustainable"
+14,Explain quantum computing to a five-year-old.,"Sure! Let's imagine you're playing with building blocks.
+
+In the world of regular computers (like the one you watch videos on), they use something called **bits** to do their work. A bit is like a light switch — it can be either **on** or **off**, or in computer language, **0 or 1**.
+
+Now, imagine you have a magic block that can be **both red and blue at the same time** — not just one or the other. That’s kind of like what a **quantum bit**, or **qubit**, is in a **quantum computer**.
+
+Quantum computers use these special qubits that can be **0 and 1 at the same time**. This lets them try **many answers all at once**, instead of one at a time like regular computers.
+
+So, if you had a puzzle with a million pieces, a regular computer would try one piece at a time. A quantum computer could try **a bunch of pieces all at once**, like magic!
+
+That’s why quantum computers are really good at solving tricky problems that take a long time for regular computers.
+
+So, in short:  
+**Quantum computing is like using magic blocks that can be in many shapes at once, so you can",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","Sure! Let's imagine you're playing with building blocks.
+
+In regular computers, like the one you use to watch videos or play games, everything is made up of **bits**. Think of a bit like a light switch — it can be either **on** (1) or **off** (0). It's like having a block that can only be one color at a time, like red or blue.
+
+Now, in **quantum computing**, the blocks are a little different. They're called **qubits**. Qubits are like magic blocks that can be **both red and blue at the same time** — kind of like being in two places at once! This is called **superposition**.
+
+Because of this magic, quantum computers can try out **many answers at the same time**, instead of just one at a time like regular computers. It's like solving a puzzle super fast by trying all the pieces at once!
+
+So, quantum computing is like using **magic blocks** that can do more things at once, helping us solve tricky problems faster. Cool, right? 🌟"
+15,How do noise-cancelling headphones work?,"Noise-cancelling headphones work by using a combination of **active noise control (ANC)** and **passive noise isolation** to reduce unwanted ambient sounds. Here's a breakdown of how they work:
+
+---
+
+### **1. Passive Noise Isolation**
+This is the simplest and most effective part of noise cancellation and works without any power.
+
+- **How it works:** The physical design of the headphones (e.g., ear cups, padding, and materials) blocks or absorbs sound waves from entering the ear.
+- **Best for:** High-frequency sounds like speech, wind, and rustling.
+- **Limitation:** It’s less effective at blocking low-frequency, continuous sounds like engine hums or airplane noise.
+
+---
+
+### **2. Active Noise Cancellation (ANC)**
+This is the ""smart"" part of noise-cancelling headphones and requires power (usually from a battery).
+
+- **How it works:**
+  1. **Microphones** on the outside of the headphones pick up ambient noise.
+  2. The headphone’s **processor** analyzes the sound waves and generates an **anti-noise signal** — a sound wave that is the exact **opposite (inverted phase)** of the ambient noise.
+  3. The **anti-noise",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","Noise-cancelling headphones work by using a combination of **active noise control (ANC)** and **passive noise isolation** to reduce unwanted ambient sounds. Here's a breakdown of how they work:
+
+---
+
+### **1. Passive Noise Isolation**
+This is the simplest and most effective part of noise cancellation and doesn't require any power.
+
+- **How it works:** The physical design of the headphones (e.g., ear cups, padding, and materials) blocks or absorbs sound waves from entering the ear.
+- **Best for:** High-frequency sounds like speech, rustling, and some mid-range noises.
+- **Limitation:** It's less effective at blocking low-frequency sounds like engine hums or airplane cabin noise.
+
+---
+
+### **2. Active Noise Cancellation (ANC)**
+This is the ""smart"" part of noise-cancelling headphones and requires power (usually from a battery).
+
+- **How it works:**
+  1. **Microphones** on the outside of the headphones pick up ambient noise.
+  2. The headphone's **processor** analyzes the sound waves and generates an **anti-noise signal** — a sound wave that is the exact **opposite (inverted phase)** of the ambient noise.
+  3. The **"
+16,What is Big O notation?,"**Big O notation** is a mathematical notation used in **computer science** to describe the **performance or complexity** of an algorithm. Specifically, it characterizes the **worst-case scenario** in terms of **time** or **space** (memory) requirements as the input size grows.
+
+---
+
+### 📌 Purpose of Big O Notation
+
+Big O helps you understand how the **runtime or space requirements** of an algorithm **scale** with the **size of the input** (usually denoted as `n`).
+
+It answers the question:
+> **""How does the algorithm behave as the input size becomes very large?""**
+
+---
+
+### 🧮 Common Big O Complexities
+
+| Big O Notation | Name              | Description |
+|----------------|-------------------|-------------|
+| **O(1)**       | Constant Time     | Execution time is constant, regardless of input size. |
+| **O(log n)**   | Logarithmic Time  | Time grows logarithmically with input size. |
+| **O(n)**       | Linear Time       | Time grows linearly with input size. |
+| **O(n log n)** | Linearithmic Time | Slightly slower than linear, common in efficient sorting algorithms. |
+| **O(n",Yes,"L46,L47","**Big O notation** is a mathematical notation used in **computer science** to describe the **performance or complexity** of an algorithm. Specifically, it characterizes the **worst-case scenario** in terms of **time** or **space** (memory) requirements as the input size grows.
+
+---
+
+### 📌 Purpose of Big O Notation
+
+Big O helps you understand how the **runtime or space requirements** of an algorithm **scale** with the **size of the input** (usually denoted as `n`).
+
+It answers the question:
+> **""How does the algorithm behave as the input size becomes very large?""**
+
+---
+
+### 🧮 Common Big O Complexities (from best to worst)
+
+| Big O Notation | Name              | Description |
+|----------------|-------------------|-------------|
+| **O(1)**       | Constant Time     | Execution time is constant, regardless of input size. |
+| **O(log n)**   | Logarithmic Time  | Time grows logarithmically with input size. |
+| **O(n)**       | Linear Time       | Time grows linearly with input size. |
+| **O(n log n)** | Linearithmic Time | Slightly worse than linear, common in efficient sorting algorithms."
+17,What is the water cycle?,"The **water cycle**, also known as the **hydrological cycle**, is the continuous movement of water on, above, and below the surface of the Earth. It is a natural process that involves the exchange of water between the Earth's oceans, atmosphere, and land. The water cycle is essential for sustaining life and plays a key role in weather patterns, climate, and ecosystems.
+
+### Key Processes in the Water Cycle:
+
+1. **Evaporation**  
+   - Water from oceans, rivers, lakes, and even soil turns into water vapor due to the heat from the sun.  
+   - Plants also release water vapor into the air through a process called **transpiration**.  
+   - Together, evaporation and transpiration are called **evapotranspiration**.
+
+2. **Condensation**  
+   - As water vapor rises and cools in the atmosphere, it changes back into liquid form, forming clouds.  
+   - This process is called **condensation**.
+
+3. **Precipitation**  
+   - When the water droplets in clouds become too heavy, they fall to the Earth as **precipitation**.  
+   - This can take the form of rain, snow, sleet, or hail, depending on temperature conditions.
+
+4.",No,,NA
+18,How do I remove a red wine stain from carpet?,"Removing a red wine stain from carpet as soon as possible is key to preventing it from setting. Here's a step-by-step guide to help you effectively remove a red wine stain from your carpet:
+
+---
+
+### **Step-by-Step Guide to Remove Red Wine from Carpet**
+
+#### **1. Act Quickly**
+- The sooner you treat the stain, the better your chances of removing it completely.
+
+#### **2. Blot, Don’t Rub**
+- Use a clean white cloth or paper towel to **gently blot** the stain. Rubbing can push the wine deeper into the carpet fibers.
+
+#### **3. Rinse with Cold Water**
+- Hold the back of the carpet under cold running water to flush the stain from the back. This helps push the wine out through the top.
+
+#### **4. Apply a Stain Remover**
+Use one of the following solutions:
+
+##### **Option 1: Dish Soap and Baking Soda**
+- Mix **1 tablespoon of white vinegar**, **1 tablespoon of dish soap**, and **1 cup of cold water**.
+- Apply the solution to the stain with a clean cloth.
+- Let it sit for 5–10 minutes.
+- Blot with a clean, damp cloth to lift the stain.
+- Rinse with",Yes,"L46,L47,L48,L50,L51,L52","Removing a red wine stain from carpet as soon as possible is key to preventing it from setting. Here's a step-by-step guide to help you effectively remove a red wine stain from your carpet:
+
+---
+
+### **Step-by-Step Guide to Remove Red Wine from Carpet**
+
+#### **1. Act Quickly**
+- The sooner you treat the stain, the better your chances of removing it completely.
+
+#### **2. Blot, Don’t Rub**
+- Use a clean white cloth or paper towel to **gently blot** the stain. Rubbing can push the wine deeper into the carpet fibers.
+
+#### **3. Rinse with Cold Water**
+- Hold the back of the carpet under cold running water to flush the stain from the back. This helps push the wine out through the top.
+
+#### **4. Apply a Stain Remover**
+Use one of the following solutions:
+
+##### **Option 1: Dish Soap and Baking Soda**
+- Mix **1 tablespoon of white vinegar**, **1 tablespoon of dish soap**, and **1 cup of cold water**.
+- Apply the solution to the stain with a clean cloth.
+- Let it sit for 5–10 minutes.
+- Blot with a clean, damp cloth to lift the stain.
+- Rinse with"
+19,What were the main causes of World War I?,"World War I (1914–1918) was a global conflict that arose from a complex web of political, economic, and social factors. While the **immediate cause** was the **assassination of Archduke Franz Ferdinand of Austria-Hungary** in June 1914, the **main underlying causes** can be summarized as follows:
+
+---
+
+### 1. **Militarism**
+- European powers engaged in an **arms race**, building up their military forces and stockpiling weapons.
+- Nationalism and competition led to the belief that military strength was essential for national prestige and security.
+- **Naval arms race** between Britain and Germany was particularly intense.
+
+---
+
+### 2. **Alliances**
+- A system of **military alliances** created a situation where a conflict between two countries could quickly escalate into a general war.
+  - **Triple Entente**: France, Russia, and Britain.
+  - **Triple Alliance**: Germany, Austria-Hungary, and Italy (later switched sides).
+- These alliances were meant for mutual defense but instead **locked countries into war** once hostilities began.
+
+---
+
+### 3. **Imperialism**
+- European powers competed for **colonies and global dominance",Yes,"L46,L47,L48,L49,L52,L53","World War I (1914–1918) was a global conflict that arose from a complex web of political, economic, and social factors. While the **immediate cause** was the **assassination of Archduke Franz Ferdinand of Austria-Hungary** in June 1914, the **main underlying causes** can be summarized as follows:
+
+---
+
+### 1. **Militarism**
+- European powers engaged in an **arms race**, building up their military forces and stockpiling weapons.
+- Nationalism and competition led to the belief that military strength was essential for national prestige and security.
+- **Naval arms race** between Britain and Germany was particularly intense.
+
+---
+
+### 2. **Alliances**
+- A system of **military alliances** created a situation where a conflict between two countries could quickly escalate into a general war.
+  - **Triple Entente**: France, Russia, and Britain.
+  - **Triple Alliance**: Germany, Austria-Hungary, and Italy (later switched sides).
+- These alliances were meant for mutual defense but instead **locked countries into war** once hostilities began.
+
+---
+
+### 3. **Imperialism**
+- European powers competed for **colonies and global dominance"
+20,How does compound interest work?,"Compound interest is a powerful financial concept that allows your money to grow exponentially over time. Unlike **simple interest**, which is calculated only on the initial principal amount, **compound interest** is calculated on both the principal and the accumulated interest from previous periods.
+
+---
+
+### 🔢 **Basic Formula for Compound Interest:**
+
+$$
+A = P \left(1 + \frac{r}{n}\right)^{nt}
+$$
+
+Where:
+- $ A $ = the future value of the investment/loan, including interest
+- $ P $ = the principal investment amount (initial deposit or loan amount)
+- $ r $ = annual interest rate (in decimal form, e.g., 5% = 0.05)
+- $ n $ = number of times that interest is compounded per year (e.g., monthly = 12, quarterly = 4)
+- $ t $ = the time the money is invested or borrowed for, in years
+
+---
+
+### 📈 **How It Works in Practice:**
+
+Let’s say you invest **$1,000** at an **annual interest rate of 5%**, compounded **annually** for **10 years**.
+
+$$
+A = 1000 \left(1",No,,NA
+21,What are the symptoms of burnout?,"Burnout is a state of emotional, physical, and mental exhaustion caused by prolonged stress, often related to work or caregiving. It can significantly impact your health, productivity, and quality of life. The symptoms of burnout can be categorized into **emotional**, **physical**, and **behavioral** signs. Here's a breakdown:
+
+---
+
+### **Emotional and Mental Symptoms of Burnout**
+
+1. **Chronic fatigue** – Feeling constantly tired, even after rest.
+2. **Cynicism and detachment** – Becoming negative, detached, or indifferent toward your job or responsibilities.
+3. **Reduced motivation** – Feeling like your work is meaningless or unimportant.
+4. **Feelings of helplessness or hopelessness** – Believing that nothing you do will make a difference.
+5. **Anxiety or irritability** – Increased frustration, impatience, or emotional outbursts.
+6. **Loss of enjoyment** – No longer finding satisfaction in activities you once enjoyed.
+7. **Sense of failure or self-doubt** – Feeling ineffective or questioning your own abilities.
+
+---
+
+### **Physical Symptoms of Burnout**
+
+1. **Headaches or muscle pain** – Unexplained aches and pains.
+2. **Sleep disturbances**",No,,NA
+22,Describe how the immune system fights infections.,"The immune system is a complex network of cells, tissues, and organs that work together to defend the body against harmful pathogens such as bacteria, viruses, fungi, and parasites. It has two main components: the **innate immune system** and the **adaptive immune system**. Here's how they work together to fight infections:
+
+---
+
+### **1. Innate Immune System (First Line of Defense)**
+
+The innate immune system is the body’s first and fastest response to infection. It is **non-specific**, meaning it doesn’t target specific pathogens but instead recognizes general patterns associated with invaders.
+
+#### **Key Components of the Innate Immune System:**
+
+- **Physical and Chemical Barriers:**
+  - **Skin** and **mucous membranes** act as physical barriers.
+  - **Stomach acid**, **lysozyme in saliva**, and **antimicrobial peptides** in skin and mucous membranes kill or inhibit pathogens.
+
+- **Inflammatory Response:**
+  - When tissue is damaged or infected, **mast cells** release **histamine**, causing blood vessels to dilate and become more permeable.
+  - This increases blood flow to the area, bringing immune cells to the site of infection and causing **redness, heat,",No,,NA
+23,Is it ever okay to lie?,"The question of whether it is ever okay to lie is complex and depends on the context, the intent behind the lie, and the consequences it may have. Different ethical frameworks offer varying perspectives:
+
+1. **Deontological Ethics (e.g., Kantian Ethics)**:  
+   Immanuel Kant argued that lying is inherently wrong because it violates a moral duty to tell the truth. Lying undermines trust and treats others as means to an end rather than as ends in themselves. From this perspective, lying is never justified, even in difficult situations.
+
+2. **Consequentialist Ethics (e.g., Utilitarianism)**:  
+   Utilitarianism evaluates actions based on their outcomes. A lie might be considered acceptable if it leads to greater overall happiness or minimizes harm. For example, lying to protect someone from emotional pain (e.g., not revealing a terminal diagnosis to avoid distress) could be justified if the consequences are more positive than negative.
+
+3. **Virtue Ethics**:  
+   This approach focuses on character and moral virtues. Honesty is generally valued, but virtues like compassion or kindness might sometimes require a lie if it reflects a more ""virtuous"" response in a specific situation. The emphasis is on the moral character of the person rather than strict rules or",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","The question of whether it is ever okay to lie is complex and depends on the context, the intent behind the lie, and the consequences it may have. Different ethical frameworks offer varying perspectives:
+
+1. **Deontological Ethics (e.g., Kantian Ethics)**:  
+   Immanuel Kant argued that lying is inherently wrong because it violates a moral duty to tell the truth. Lying undermines trust and treats others as means to an end rather than as ends in themselves. From this perspective, lying is never justified, even in difficult situations.
+
+2. **Consequentialist Ethics (e.g., Utilitarianism)**:  
+   Utilitarianism evaluates actions based on their outcomes. A lie might be considered acceptable if it leads to greater overall happiness or minimizes harm. For example, lying to protect someone from emotional pain (e.g., not revealing a terminal diagnosis to avoid distress) could be justified if the consequences are more positive than negative.
+
+3. **Virtue Ethics**:  
+   This approach focuses on character and moral virtues. Honesty is generally valued, but virtues like compassion or kindness might sometimes require a lie if it reflects a more ""virtuous"" response in a specific situation. The emphasis is on the moral character of the person rather than strict rules or"
+24,What makes a good leader?,"A good leader is someone who can inspire, guide, and support others to achieve a common goal. While leadership styles can vary, there are several key qualities and behaviors that are commonly associated with effective leadership. Here are some of the most important traits and characteristics that make a good leader:
+
+---
+
+### **1. Vision and Purpose**
+- **Clear Vision**: A good leader has a clear, compelling vision of the future and can communicate it effectively.
+- **Sense of Purpose**: They understand the ""why"" behind their goals and can align the team around a shared mission.
+
+---
+
+### **2. Strong Communication Skills**
+- **Active Listening**: They listen to others with empathy and openness.
+- **Clarity and Transparency**: They communicate expectations, feedback, and information clearly and honestly.
+- **Persuasion and Influence**: They can inspire and persuade others without relying on authority alone.
+
+---
+
+### **3. Integrity and Ethics**
+- **Honesty and Trustworthiness**: A good leader is consistent in their actions and values.
+- **Accountability**: They take responsibility for their decisions and actions, and encourage others to do the same.
+- **Fairness and Respect**: They treat people with dignity and make decisions based on principles, not personal gain.
+
+---
+
+### **4.",Yes,"L49,L51,L52","A good leader is someone who can inspire, guide, and support others to achieve a common goal. While leadership styles can vary, there are several key qualities and behaviors that are commonly associated with effective leadership. Here are some of the most important traits and characteristics that make a good leader:
+
+---
+
+### **1. Vision and Purpose**
+- **Clear Vision**: A good leader has a clear, compelling vision of the future and can communicate it effectively.
+- **Sense of Purpose**: They understand the ""why"" behind their goals and can align the team around a shared mission.
+
+---
+
+### **2. Strong Communication Skills**
+- **Active Listening**: They listen to others with empathy and openness.
+- **Clarity and Transparency**: They communicate expectations, feedback, and information clearly and honestly.
+- **Persuasion and Influence**: They can inspire and persuade others without relying on authority alone.
+
+---
+
+### **3. Integrity and Ethics**
+- **Honesty and Trustworthiness**: A good leader is consistent in their actions and values.
+- **Accountability**: They take responsibility for their decisions and actions, and encourage others to do the same.
+- **Fairness and Respect**: They treat people with dignity and make decisions based on principles, not personal gain.
+
+---
+
+### **4."
+25,How do electric vehicles compare to gasoline cars?,"Electric vehicles (EVs) and gasoline-powered cars each have their own advantages and disadvantages. Here's a detailed comparison across several key categories:
+
+---
+
+### **1. Environmental Impact**
+| **Category** | **Electric Vehicles (EVs)** | **Gasoline Cars** |
+|--------------|-----------------------------|-------------------|
+| **Emissions** | **Zero tailpipe emissions**. Emissions depend on the electricity source (e.g., coal vs. renewables). | **Emit CO₂, NOx, and other pollutants** from burning gasoline. |
+| **Overall Emissions** | Generally **lower lifecycle emissions**, especially with renewable energy. | Higher emissions over their lifetime due to fuel combustion and production. |
+| **Air Quality** | Better for urban air quality due to no exhaust. | Worse for air quality due to exhaust and particulate matter. |
+
+---
+
+### **2. Cost of Ownership**
+| **Category** | **Electric Vehicles (EVs)** | **Gasoline Cars** |
+|--------------|-----------------------------|-------------------|
+| **Upfront Cost** | **Higher** due to battery costs. | **Lower** initial purchase price. |
+| **Fuel Cost** | **Much lower** (electricity is cheaper than gasoline). | **Higher",No,,NA
+26,What is the difference between weather and climate?,"**Weather** and **climate** are related concepts, but they refer to different things:
+
+### **Weather**
+- **Definition**: Weather refers to the **short-term atmospheric conditions** in a specific place and time.
+- **Timeframe**: It can change from **minute to minute, hour to hour, or day to day**.
+- **Examples**:
+  - ""It is raining today.""
+  - ""There is a thunderstorm in the afternoon.""
+  - ""The temperature is 25°C with partly cloudy skies.""
+- **Factors**: Includes temperature, humidity, precipitation, wind speed and direction, and atmospheric pressure.
+
+---
+
+### **Climate**
+- **Definition**: Climate refers to the **long-term average of weather patterns** in a particular region.
+- **Timeframe**: It is typically measured over **30 years or more**.
+- **Examples**:
+  - ""The climate in the Sahara Desert is hot and dry.""
+  - ""The Pacific Northwest has a temperate, rainy climate.""
+- **Factors**: Includes average temperature, precipitation, wind patterns, and extreme weather events over a long period.
+
+---
+
+### **Key Difference**
+- **Weather** is what's happening **right now** in the atmosphere.
+- **Climate** is what the **",Yes,"L46,L47,L48,L49,L50,L51,L53","**Weather** and **climate** are related concepts, but they refer to different things:
+
+### **Weather**
+- **Definition**: Weather refers to the **short-term atmospheric conditions** in a specific place and time.
+- **Timeframe**: It can change from **minute to minute, hour to hour, or day to day**.
+- **Examples**:
+  - ""It is raining today.""
+  - ""There is a thunderstorm in the afternoon.""
+  - ""The temperature is 25°C with partly cloudy skies.""
+- **Factors**: Includes temperature, humidity, precipitation, wind speed and direction, and atmospheric pressure.
+
+---
+
+### **Climate**
+- **Definition**: Climate refers to the **long-term average of weather patterns** in a particular region.
+- **Timeframe**: It is typically measured over **30 years or more**.
+- **Examples**:
+  - ""The climate of the Sahara Desert is hot and dry.""
+  - ""The Pacific Northwest has a temperate, rainy climate.""
+- **Factors**: Includes average temperature, precipitation, wind patterns, and extreme weather events over a long period.
+
+---
+
+### **Key Difference**
+| **Aspect**       | **Weather**                          | **Climate**                          |
+|------------------|--------------------------------------|--------------------------------"
+27,What is CRISPR and why does it matter?,"CRISPR is a groundbreaking gene-editing technology that allows scientists to make precise changes to the DNA of living organisms. The acronym **CRISPR** stands for **Clustered Regularly Interspaced Short Palindromic Repeats**, which are sequences found in the genomes of bacteria and archaea. These sequences are part of a natural defense system that bacteria use to protect themselves from viruses.
+
+### How CRISPR Works
+
+The CRISPR system, when used in a laboratory setting, typically involves two key components:
+
+1. **CRISPR-associated protein 9 (Cas9)**: An enzyme that acts like molecular scissors, cutting DNA at specific locations.
+2. **Guide RNA (gRNA)**: A small piece of RNA that guides Cas9 to the exact location in the DNA where a cut is needed.
+
+When the guide RNA finds the target DNA sequence, Cas9 makes a precise cut. Once the DNA is cut, the cell's natural repair mechanisms kick in. Scientists can use this process to:
+
+- **Knock out** a gene (disable it),
+- **Insert** a new gene, or
+- **Correct** a mutation.
+
+### Why CRISPR Matters
+
+CRISPR is a revolutionary tool because it is:
+
+- **Prec",Yes,"L46,L47,L48,L49,L50,L51,L52","CRISPR is a groundbreaking gene-editing technology that allows scientists to make precise changes to the DNA of living organisms. The acronym **CRISPR** stands for **Clustered Regularly Interspaced Short Palindromic Repeats**, which are sequences found in the genomes of bacteria and archaea. These sequences are part of a natural defense system that bacteria use to protect themselves from viruses.
+
+### How CRISPR Works
+
+The CRISPR system, when used in a laboratory setting, typically involves two key components:
+
+1. **CRISPR-associated protein 9 (Cas9)**: An enzyme that acts like molecular scissors, cutting DNA at a specific location.
+2. **Guide RNA (gRNA)**: A small piece of RNA that guides Cas9 to the exact location in the DNA where a cut is needed.
+
+When the guide RNA finds the target DNA sequence, Cas9 makes a precise cut. Once the DNA is cut, the cell's natural repair mechanisms kick in. Scientists can use this process to:
+
+- **Knock out** a gene (disable it),
+- **Insert** a new gene,
+- **Correct** a mutation.
+
+### Why CRISPR Matters
+
+CRISPR has revolutionized the field of genetics and biotechnology because it"
+28,How do I train for a half marathon?,"Training for a **half marathon (13.1 miles or 21.1 km)** is a rewarding challenge that requires a structured plan, consistency, and attention to your body. Here's a **comprehensive guide** to help you train effectively and safely:
+
+---
+
+## 🏃‍♂️ 1. **Set a Realistic Goal and Timeline**
+
+- **Beginner:** 8–12 weeks of training
+- **Intermediate:** 6–8 weeks of training
+- **Advanced:** 4–6 weeks of training
+
+Choose a **training plan** that matches your current fitness level and experience.
+
+---
+
+## 🗓️ 2. **Sample Half Marathon Training Plan (12-Week Beginner Plan)**
+
+Here’s a **basic 12-week plan** for beginners. You can adjust based on your fitness level.
+
+| Week | Run Days | Long Run | Weekly Mileage |
+|------|----------|----------|----------------|
+| 1    | 3–4      | 3–4 miles | 10–15 miles     |
+| 2    | 3–4      | 4–5 miles | 12–18 miles     |
+| 3    | 3",Yes,"L47,L48,L51,L52","Training for a **half marathon (13.1 miles or 21.1 km)** is a rewarding challenge that requires a structured plan, consistency, and attention to your body. Here's a **comprehensive guide** to help you train effectively and safely:
+
+---
+
+## 🏃‍♂️ 1. **Set a Realistic Goal and Timeline**
+
+- **Beginner:** 8–12 weeks of training
+- **Intermediate:** 6–8 weeks of training
+- **Advanced:** 4–6 weeks of training
+
+Choose a **training plan** that matches your current fitness level and experience.
+
+---
+
+## 🗓️ 2. **Sample Half Marathon Training Plan (12-Week Beginner Plan)**
+
+Here’s a **basic 12-week plan** for beginners:
+
+| Week | Run Days | Long Run | Weekly Mileage |
+|------|----------|----------|----------------|
+| 1    | 3–4      | 3–4 miles | 10–15 miles      |
+| 2    | 3–4      | 4–5 miles | 12–18 miles      |
+| 3    | 3–4      | 5–6 miles"
+29,What is the role of the mitochondria in a cell?,"The mitochondria are often referred to as the **""powerhouses of the cell""** because their primary role is to **produce energy** in the form of **adenosine triphosphate (ATP)**, which the cell uses to carry out its functions.
+
+### Key Roles of Mitochondria:
+
+1. **ATP Production (Cellular Respiration):**
+   - Mitochondria generate most of the ATP in eukaryotic cells through a process called **aerobic respiration**.
+   - This process involves:
+     - **Glycolysis** (in the cytoplasm),
+     - **Krebs cycle (citric acid cycle)** (in the mitochondrial matrix),
+     - **Electron transport chain (ETC)** (in the inner mitochondrial membrane).
+   - The ETC is where the majority of ATP is produced through **oxidative phosphorylation**.
+
+2. **Regulation of Cellular Metabolism:**
+   - Mitochondria are involved in various metabolic pathways, including the breakdown of carbohydrates, fats, and proteins.
+   - They help regulate the balance of energy production and consumption in the cell.
+
+3. **Calcium Storage and Signaling:**
+   - Mitochondria help regulate **intracellular calcium levels",Yes,L47,"The mitochondria are often referred to as the **""powerhouses of the cell""** because their primary role is to **produce energy** in the form of **adenosine triphosphate (ATP)**, which the cell uses to carry out its functions.
+
+### Key Roles of Mitochondria:
+
+1. **ATP Production (Cellular Respiration):**
+   - Mitochondria generate most of the ATP in eukaryotic cells through a process called **aerobic respiration**.
+   - This process involves:
+     - **Glycolysis** (in the cytoplasm),
+     - **Krebs cycle (citric acid cycle)** (in the mitochondrial matrix),
+     - **Electron transport chain (ETC)** (in the inner mitochondrial membrane).
+   - The ETC is where the majority of ATP is produced through **oxidative phosphorylation**.
+
+2. **Regulation of Cellular Metabolism:**
+   - Mitochondria help regulate the metabolism of carbohydrates, lipids, and amino acids.
+   - They are involved in the breakdown of fatty acids (beta-oxidation) and the synthesis of certain amino acids and heme.
+
+3. **Calcium Storage and Signaling:**
+   - Mitochond"
+30,How do airplanes stay in the air?,"Airplanes stay in the air due to a combination of four main forces: **lift**, **weight (gravity)**, **thrust**, and **drag**. The key to staying airborne is **lift**, which must overcome the force of gravity (weight). Here's a breakdown of how it works:
+
+---
+
+### 1. **Lift**
+- **Lift** is the upward force that counteracts the weight of the airplane and keeps it in the air.
+- It is primarily generated by the **wings**.
+- The shape of the wing (called an **airfoil**) is designed so that **air moves faster over the top surface** than the bottom. This creates a **pressure difference**:
+  - **Lower pressure** on top
+  - **Higher pressure** underneath
+- This pressure difference results in an **upward force** — **lift**.
+
+> **Bernoulli’s Principle** explains this: faster-moving air has lower pressure.
+
+---
+
+### 2. **Weight (Gravity)**
+- This is the **downward force** due to the mass of the airplane and gravity.
+- For an airplane to stay in the air, **lift must be equal to or greater than weight**.
+
+---
+
+### 3. **Thrust",Yes,"L46,L47,L48,L49,L51,L52,L53","Airplanes stay in the air due to a combination of four main forces: **lift**, **weight (gravity)**, **thrust**, and **drag**. The key to staying airborne is **lift**, which must overcome the force of gravity (weight). Here's a breakdown of how it works:
+
+---
+
+### 1. **Lift**
+- **Lift** is the upward force that counteracts the weight of the airplane and keeps it in the air.
+- It is primarily generated by the **wings**.
+- The shape of the wing (called an **airfoil**) is designed to create a **pressure difference** between the top and bottom surfaces:
+  - Air moves **faster over the curved top surface**, creating **lower pressure**.
+  - Air moves **slower under the flatter bottom surface**, creating **higher pressure**.
+  - This **pressure difference** results in an upward force — **lift**.
+
+> **Note:** While the ""equal transit time"" theory is often taught, it's an oversimplification. The real explanation involves **Bernoulli's principle** and **Newton's third law** (action and reaction).
+
+---
+
+### 2. **Weight (Gravity)**
+- This is the **downward force"
+31,What is the Pythagorean theorem?,"The **Pythagorean Theorem** is a fundamental principle in **geometry** that applies to **right-angled triangles**. It was named after the ancient Greek mathematician **Pythagoras**, although the theorem was known to earlier civilizations as well.
+
+### Statement of the Theorem:
+
+> In a **right-angled triangle**, the **square of the length of the hypotenuse** (the side **opposite** the right angle) is **equal to the sum of the squares of the lengths of the other two sides**.
+
+---
+
+### Formula:
+
+If a right-angled triangle has:
+
+- $ a $ and $ b $ as the **lengths of the two legs** (the sides forming the right angle), and  
+- $ c $ as the **length of the hypotenuse** (the side opposite the right angle),  
+
+Then the Pythagorean Theorem is written as:
+
+$$
+a^2 + b^2 = c^2
+$$
+
+---
+
+### Example:
+
+Suppose a right triangle has legs of lengths 3 and 4.
+
+$$
+a = 3,\quad b = 4
+$$
+
+Then the hypotenuse $ c $ is:
+
+$$
+c^2 = 3^2 + 4",Yes,"L46,L47","The **Pythagorean Theorem** is a fundamental principle in **geometry** that applies to **right-angled triangles**. It was named after the ancient Greek mathematician **Pythagoras**, although the theorem was known to earlier civilizations as well.
+
+### Statement of the Theorem:
+
+> In a **right-angled triangle**, the **square of the length of the hypotenuse** (the side **opposite** the right angle) is **equal to the sum of the squares of the lengths of the other two sides**.
+
+---
+
+### Formula:
+
+If a right-angled triangle has:
+
+- $ a $ and $ b $ as the **lengths of the two legs** (the sides forming the right angle), and  
+- $ c $ as the **length of the hypotenuse** (the side opposite the right angle),  
+
+Then the Pythagorean Theorem is written as:
+
+$$
+a^2 + b^2 = c^2
+$$
+
+---
+
+### Example:
+
+Suppose a right triangle has legs of lengths 3 and 4.
+
+$$
+a = 3,\quad b = 4
+$$
+
+Then the hypotenuse $ c $ is:
+
+$$
+c^2 = 3^2 + 4"
+32,How do I make sourdough bread from scratch?,"Making sourdough bread from scratch is a rewarding process that involves creating and maintaining a sourdough starter, then using it to leaven your bread. Here's a step-by-step guide to making your first sourdough loaf from scratch:
+
+---
+
+## 🧺 **What You'll Need**
+
+### **Ingredients**
+- **For the sourdough starter:**
+  - 1 cup (120g) whole wheat or all-purpose flour
+  - 1/2 cup (120ml) water (non-chlorinated)
+
+- **For the bread:**
+  - 1 cup (240g) warm water (about 75°F / 24°C)
+  - 1 cup (120g) bread flour or all-purpose flour
+  - 1/2 cup (60g) whole wheat flour (optional, for flavor)
+  - 1 1/2 to 2 tablespoons active sourdough starter (fed and bubbly)
+  - 1 1/2 teaspoons salt
+
+---
+
+## 🧪 **Step 1: Create a Sourdough Starter**
+
+**Day 1:**
+- Mix 1 cup flour and 1/2 cup water in a jar",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","Making sourdough bread from scratch is a rewarding process that involves creating and maintaining a sourdough starter, then using it to leaven your bread. Here's a complete guide to making sourdough bread from scratch, step by step.
+
+---
+
+## 🧺 **What You'll Need**
+
+### **Ingredients**
+- **Sourdough starter** (active and bubbly)
+- 500g (4 cups) bread flour (or all-purpose flour)
+- 300–350g (1 1/4 to 1 1/2 cups) water (room temperature)
+- 10g (2 tsp) salt
+- Optional: 50–100g (1/4 to 1/2 cup) whole wheat flour or rye flour for flavor
+
+### **Equipment**
+- Large mixing bowl
+- Measuring cups and spoons
+- Kitchen scale (optional but recommended)
+- Bench scraper
+- Banneton (proofing basket) or bowl lined with a floured cloth
+- Dutch oven or heavy oven-safe pot
+- Parchment paper (optional)
+
+---
+
+## 🧪 **Step 1: Feed Your Sourdough Starter**
+
+Before you start, make sure your"
+33,What is the difference between empathy and sympathy?,"Empathy and sympathy are both important emotional responses that involve caring about others, but they differ in depth, perspective, and emotional engagement. Here's a breakdown of the key differences:
+
+---
+
+### **1. Definition and Core Meaning**
+
+- **Empathy**  
+  Empathy is the **ability to understand and share the feelings of another person**. It involves **putting yourself in someone else's shoes** and experiencing their emotions as if they were your own.
+
+- **Sympathy**  
+  Sympathy is the **feeling of pity, sorrow, or concern for someone else's misfortune**. It is more of an **emotional reaction to someone else's pain**, but not necessarily a shared experience of that pain.
+
+---
+
+### **2. Perspective**
+
+- **Empathy**  
+  - Involves **emotional and cognitive perspective-taking**.  
+  - You **feel with** the person.  
+  - You **see the world from their point of view**.
+
+- **Sympathy**  
+  - Involves **emotional distance**.  
+  - You **feel for** the person.  
+  - You **acknowledge their pain from your own perspective**.
+
+---
+
+### **3. Emotional Involvement**
+
+",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","Empathy and sympathy are both important emotional responses that involve caring about others, but they differ in depth, perspective, and emotional engagement. Here's a breakdown of the key differences:
+
+---
+
+### **1. Definition and Core Meaning**
+
+- **Empathy**  
+  Empathy is the **ability to understand and share the feelings of another person**. It involves **putting yourself in someone else's shoes** and experiencing their emotions as if they were your own.
+
+- **Sympathy**  
+  Sympathy is the **feeling of pity, sorrow, or concern for someone else's misfortune**. It is more of an **emotional reaction to someone else's pain**, but not necessarily a shared experience of that pain.
+
+---
+
+### **2. Perspective**
+
+- **Empathy**  
+  - Involves **emotional and cognitive connection**.
+  - Requires **seeing the situation from the other person's point of view**.
+  - You **feel with** the person.
+
+- **Sympathy**  
+  - Involves **emotional distance**.
+  - You **feel for** the person, often from your own perspective.
+  - You may feel **pity or sorrow**, but not necessarily the same emotions the person is"
+34,How does the stock market work?,"The stock market is a complex but fascinating system that allows individuals and institutions to buy and sell ownership shares in publicly traded companies. Here's a simplified explanation of how it works:
+
+---
+
+### **1. What is a Stock?**
+A **stock** (or **share**) represents a small piece of ownership in a company. When you buy a stock, you become a **shareholder** and own a portion of that company. The value of your stock can go up or down based on the company's performance and other market factors.
+
+---
+
+### **2. What is the Stock Market?**
+The **stock market** is a network of exchanges where stocks are bought and sold. The most well-known stock exchanges include:
+
+- **New York Stock Exchange (NYSE)**
+- **Nasdaq**
+- **London Stock Exchange (LSE)**
+- **Tokyo Stock Exchange (TSE)**
+
+These exchanges provide a platform for companies to list their shares and for investors to trade them.
+
+---
+
+### **3. How Do Companies Get Listed on the Stock Market?**
+Companies go public through an **Initial Public Offering (IPO)**. This is the first time a company sells shares to the public. The IPO allows the company to raise capital (money) to grow,",No,,NA
+35,What are black holes?,"Black holes are among the most fascinating and mysterious objects in the universe. They are regions in space where the gravitational pull is so strong that nothing—not even light—can escape from them. Here's a breakdown of what black holes are and how they form:
+
+---
+
+### **What is a Black Hole?**
+
+A black hole is a region of spacetime where gravity is so intense that the escape velocity—the speed needed to break free from its gravitational pull—exceeds the speed of light. Since nothing can travel faster than light, nothing can escape from a black hole once it has crossed a certain boundary called the **event horizon**.
+
+---
+
+### **Key Features of Black Holes**
+
+1. **Event Horizon**:
+   - The ""point of no return"" around a black hole.
+   - Once something crosses the event horizon, it cannot escape.
+
+2. **Singularity**:
+   - At the center of a black hole lies a point of infinite density and zero volume, called the **singularity**.
+   - Our current understanding of physics breaks down at the singularity.
+
+3. **No Hair Theorem**:
+   - Black holes are described by only three properties: **mass**, **spin**, and **electric charge**.
+   - All other information about",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","Black holes are among the most fascinating and mysterious objects in the universe. They are regions in space where the gravitational pull is so strong that nothing—not even light—can escape from them. Here's a breakdown of what black holes are and how they form:
+
+---
+
+### **What is a Black Hole?**
+
+A black hole is a region of spacetime where gravity is so intense that the escape velocity—the speed needed to break free from its gravitational pull—exceeds the speed of light. Since nothing can travel faster than light, nothing can escape from a black hole once it has crossed a certain boundary called the **event horizon**.
+
+---
+
+### **Key Features of Black Holes**
+
+1. **Event Horizon**:
+   - The ""point of no return"" around a black hole.
+   - Once something crosses the event horizon, it cannot escape.
+
+2. **Singularity**:
+   - At the center of a black hole lies a point of infinite density and zero volume, called the **singularity**.
+   - Our current understanding of physics breaks down at the singularity.
+
+3. **No Hair Theorem**:
+   - Black holes are described by only three properties: **mass**, **spin**, and **electric charge**.
+   - All other information about"
+36,How do I improve my public speaking skills?,"Improving your public speaking skills is a valuable and achievable goal. Whether you're speaking in front of a small group or a large audience, strong public speaking skills can boost your confidence, influence, and effectiveness. Here's a step-by-step guide to help you improve:
+
+---
+
+### **1. Understand the Basics of Public Speaking**
+
+- **Know your audience**: Tailor your message to their interests, knowledge level, and expectations.
+- **Define your purpose**: Are you informing, persuading, entertaining, or inspiring? Clarity of purpose will guide your content and delivery.
+- **Structure your speech**:
+  - **Introduction**: Grab attention, state your purpose.
+  - **Body**: Present key points with examples and transitions.
+  - **Conclusion**: Summarize and end with a strong closing.
+
+---
+
+### **2. Practice, Practice, Practice**
+
+- **Rehearse out loud**: Speaking silently in your head is not the same as speaking aloud.
+- **Record yourself**: Watch or listen to identify areas for improvement (tone, pacing, body language).
+- **Practice in front of a mirror or a trusted friend**: Get feedback and build confidence.
+
+---
+
+### **3. Work on Delivery Skills**
+
+- **Pace and pause**: Speak slowly and use pauses",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","Improving your public speaking skills is a valuable and achievable goal. Whether you're speaking in front of a small group or a large audience, strong public speaking skills can boost your confidence, influence, and effectiveness. Here's a step-by-step guide to help you improve:
+
+---
+
+### **1. Understand the Basics of Public Speaking**
+
+- **Know your audience**: Tailor your message to their interests, knowledge level, and expectations.
+- **Define your purpose**: Are you informing, persuading, entertaining, or inspiring? Clarity of purpose will guide your content and delivery.
+- **Structure your speech**:
+  - **Introduction**: Grab attention, state your purpose.
+  - **Body**: Present key points with examples and transitions.
+  - **Conclusion**: Summarize and end with a strong closing.
+
+---
+
+### **2. Practice, Practice, Practice**
+
+- **Rehearse out loud**: Speaking silently in your head is not the same as speaking aloud.
+- **Record yourself**: Watch or listen to identify areas for improvement (tone, pacing, body language).
+- **Practice in front of a mirror or a trusted friend**: Get feedback and build confidence.
+
+---
+
+### **3. Work on Delivery Skills**
+
+- **Pace and pause**: Speak slowly and use pauses"
+37,What is the greenhouse effect?,"The **greenhouse effect** is a natural process that warms the Earth's surface and atmosphere. It is essential for maintaining the planet's temperature at a level suitable for life. Here's a breakdown of how it works:
+
+---
+
+### **How the Greenhouse Effect Works:**
+
+1. **Sunlight Reaches Earth:**
+   - The Sun emits energy in the form of sunlight (solar radiation), which passes through the Earth's atmosphere and reaches the surface.
+
+2. **Earth Absorbs and Re-emits Energy:**
+   - The Earth's surface absorbs this solar energy and warms up.
+   - It then radiates the energy back into the atmosphere as **infrared radiation** (heat).
+
+3. **Greenhouse Gases Trap Heat:**
+   - Certain gases in the atmosphere, known as **greenhouse gases (GHGs)**, absorb and re-emit this infrared radiation.
+   - These gases include:
+     - **Carbon dioxide (CO₂)**
+     - **Methane (CH₄)**
+     - **Nitrous oxide (N₂O)**
+     - **Water vapor (H₂O)**
+     - **Fluorinated gases** (e.g., CFCs)
+
+4. **Heat is",No,,NA
+38,Explain the basics of supply and demand.,"Sure! Here's a simple explanation of the **basics of supply and demand**:
+
+---
+
+### **What is Supply and Demand?**
+
+**Supply and demand** is a fundamental concept in economics that explains how prices are determined in a market. It describes the relationship between how much of a product or service **people want to buy (demand)** and how much **sellers are willing to provide (supply)**.
+
+---
+
+### **1. Demand**
+
+- **Demand** refers to how much of a product or service consumers are **willing and able to buy** at different prices.
+- **Law of Demand**: As the **price goes up**, the **quantity demanded usually goes down**, and vice versa.
+  - Example: If the price of apples goes up, people might buy fewer apples and switch to oranges instead.
+
+---
+
+### **2. Supply**
+
+- **Supply** refers to how much of a product or service **producers are willing and able to sell** at different prices.
+- **Law of Supply**: As the **price goes up**, the **quantity supplied usually goes up**, and vice versa.
+  - Example: If the price of apples rises, farmers may grow more apples to make more money.
+
+---
+
+### **3. Equilibrium**
+
+- The **",No,,NA
+39,How does a computer processor work?,"A **computer processor**, also known as a **Central Processing Unit (CPU)**, is the ""brain"" of a computer. It is responsible for executing instructions from software and performing calculations, data movement, and control operations. Here's a simplified explanation of how a processor works:
+
+---
+
+### 1. **Basic Components of a Processor**
+A modern CPU is made up of several key components:
+
+- **Control Unit (CU):** Directs the operation of the processor. It tells other parts of the CPU what to do and when to do it.
+- **Arithmetic Logic Unit (ALU):** Performs arithmetic operations (addition, subtraction) and logical operations (comparisons, AND/OR operations).
+- **Registers:** Small, fast storage locations inside the CPU used to hold data and instructions temporarily.
+- **Cache Memory:** High-speed memory located on the CPU chip to reduce the time it takes to access data from the main memory (RAM).
+- **Bus Interface Unit:** Manages communication between the CPU and other components like RAM, storage, and input/output devices.
+
+---
+
+### 2. **The Fetch-Decode-Execute Cycle**
+The CPU operates in a continuous loop known as the **instruction cycle**, which consists of three main steps:
+
+#### a. **",Yes,"L46,L47,L48,L50,L52","A **computer processor**, also known as a **Central Processing Unit (CPU)**, is the ""brain"" of a computer. It is responsible for executing instructions from software and performing calculations, data movement, and control operations. Here's a simplified explanation of how a processor works:
+
+---
+
+### 1. **Basic Components of a Processor**
+A modern CPU is made up of several key components:
+
+- **Control Unit (CU):** Directs the operation of the processor. It tells other parts of the CPU what to do and when to do it.
+- **Arithmetic Logic Unit (ALU):** Performs arithmetic operations (addition, subtraction) and logical operations (comparisons, AND/OR operations).
+- **Registers:** Small, fast storage locations inside the CPU used to hold data and instructions temporarily.
+- **Cache Memory:** High-speed memory located on the CPU chip to reduce the time it takes to access data from the main memory (RAM).
+- **Bus Interface Unit:** Manages communication between the CPU and other parts of the computer (like RAM, storage, and input/output devices).
+
+---
+
+### 2. **The Fetch-Decode-Execute Cycle**
+The CPU operates in a continuous loop known as the **Fetch-Decode-Execute (FDE) cycle"
+40,What are the benefits of meditation?,"Meditation is a practice that involves focusing the mind and achieving a state of mental clarity and emotional calm. It has been used for thousands of years in various cultures and traditions, and in recent decades, scientific research has increasingly supported its many benefits. Here are some of the key **benefits of meditation**:
+
+---
+
+### **1. Reduces Stress**
+- **Cortisol reduction**: Meditation lowers cortisol, the body's main stress hormone.
+- **Calms the nervous system**: It activates the parasympathetic nervous system, promoting relaxation and reducing the ""fight-or-flight"" response.
+
+---
+
+### **2. Improves Mental Health**
+- **Reduces symptoms of anxiety and depression**: Studies show that regular meditation can be as effective as medication for some people.
+- **Enhances emotional regulation**: It helps you respond to emotions more thoughtfully rather than reacting impulsively.
+
+---
+
+### **3. Enhances Focus and Concentration**
+- **Improves attention span**: Meditation trains the brain to stay focused on the present moment.
+- **Boosts productivity**: Better focus can lead to improved performance at work or school.
+
+---
+
+### **4. Promotes Better Sleep**
+- **Reduces insomnia**: Meditation can help calm the mind and reduce the mental chatter that keeps",No,,NA
+41,How do antibiotics work?,"Antibiotics are medications used to treat bacterial infections. They work by either **killing bacteria** (bactericidal) or **inhibiting their growth and reproduction** (bacteriostatic). Here's a breakdown of how they work:
+
+---
+
+### **1. Interfering with Cell Wall Synthesis**
+- **Target**: Bacterial cell wall.
+- **How it works**: Many antibiotics (like **penicillins** and **cephalosporins**) prevent bacteria from building or repairing their cell walls.
+- **Result**: The bacteria become fragile and burst due to internal pressure (osmotic lysis).
+- **Example**: Penicillin inhibits enzymes (transpeptidases) that cross-link peptidoglycan in the cell wall.
+
+---
+
+### **2. Disrupting Cell Membrane Function**
+- **Target**: Bacterial cell membrane.
+- **How it works**: Some antibiotics (like **polymyxins**) damage the cell membrane, causing the contents of the cell to leak out.
+- **Result**: The bacteria die due to loss of internal components and disruption of essential processes.
+
+---
+
+### **3. Inhibiting Protein Synthesis**
+- **Target**: Bacterial ribosomes.
+- **",Yes,L48,"Antibiotics are medications used to treat bacterial infections. They work by either **killing bacteria** (bactericidal) or **inhibiting their growth and reproduction** (bacteriostatic). Here's a breakdown of how they work:
+
+---
+
+### **1. Interfering with Cell Wall Synthesis**
+- **Target**: Bacterial cell wall.
+- **How it works**: Many antibiotics (like **penicillins** and **cephalosporins**) prevent bacteria from building or repairing their cell walls.
+- **Result**: The bacteria become fragile and burst due to internal pressure (osmotic lysis).
+- **Example**: Penicillin inhibits enzymes (transpeptidases) that cross-link peptidoglycan in the cell wall.
+
+---
+
+### **2. Disrupting Cell Membrane Function**
+- **Target**: Bacterial cell membrane.
+- **How it works**: Some antibiotics (like **polymyxins**) damage the cell membrane, causing the contents of the cell to leak out.
+- **Result**: The bacteria die due to loss of internal components and disruption of essential processes.
+
+---
+
+### **3. Inhibiting Protein Synthesis**
+- **Target**: Bacterial ribosomes.
+- **"
+42,What is the scientific method?,"The **scientific method** is a systematic, logical approach used by scientists to investigate natural phenomena, test hypotheses, and develop theories. It is a process that helps ensure objectivity, reproducibility, and reliability in scientific inquiry. While the exact steps can vary depending on the field or the specific question being studied, the general process includes the following key stages:
+
+---
+
+### **1. Observation**
+- **What it is:** Scientists begin by observing the world around them and identifying a phenomenon or problem that they want to understand.
+- **Example:** You notice that plants near a window grow faster than those in a darker corner.
+
+---
+
+### **2. Question**
+- **What it is:** Based on the observation, a specific, testable question is formulated.
+- **Example:** Does the amount of sunlight affect how fast plants grow?
+
+---
+
+### **3. Hypothesis**
+- **What it is:** A hypothesis is a testable and falsifiable explanation or prediction that addresses the question.
+- **Example:** Plants grow faster when they receive more sunlight.
+
+---
+
+### **4. Experimentation**
+- **What it is:** An experiment is designed and conducted to test the hypothesis. It should include:
+  - **Control group** (for comparison)
+  - **Experimental group",Yes,"L51,L52","The **scientific method** is a systematic, logical approach used by scientists to investigate natural phenomena, test hypotheses, and develop theories. It is a process that helps ensure objectivity, reproducibility, and reliability in scientific inquiry. While the exact steps can vary depending on the field or the specific question being studied, the general process includes the following key stages:
+
+---
+
+### **1. Observation**
+- **What it is:** Scientists begin by observing the world around them and identifying a phenomenon or problem that they want to understand.
+- **Example:** You notice that plants near a window grow faster than those in a darker corner.
+
+---
+
+### **2. Question**
+- **What it is:** Based on the observation, a specific, testable question is formulated.
+- **Example:** Does the amount of sunlight affect how fast plants grow?
+
+---
+
+### **3. Hypothesis**
+- **What it is:** A hypothesis is a testable and falsifiable explanation or prediction that addresses the question.
+- **Example:** If plants receive more sunlight, then they will grow faster.
+
+---
+
+### **4. Experimentation**
+- **What it is:** An experiment is designed and conducted to test the hypothesis. It should include:
+  - **Control group** (for comparison)
+  -"
+43,How do solar panels generate electricity?,"Solar panels generate electricity through a process called the **photovoltaic (PV) effect**, which involves converting sunlight directly into electrical energy using semiconductor materials. Here's a step-by-step explanation of how this works:
+
+---
+
+### 1. **Sunlight Hits the Solar Panel**
+Solar panels are made up of many **solar cells**, typically made from **silicon**, a semiconductor material. When sunlight (composed of **photons**) strikes the surface of a solar cell, it provides energy to the electrons in the silicon atoms.
+
+---
+
+### 2. **Photons Knock Electrons Loose**
+The energy from the photons is absorbed by the electrons in the silicon atoms. If the energy is sufficient, it can knock the electrons loose from their atoms, creating **free electrons** and **electron holes** (the absence of an electron).
+
+---
+
+### 3. **Electric Field Separates the Charges**
+Solar cells are constructed with a **p-n junction**, which is a boundary between two types of silicon:
+- **p-type silicon** (doped with boron, which has fewer electrons, creating ""holes"")
+- **n-type silicon** (doped with phosphorus, which has extra electrons)
+
+This junction creates an **electric field** that pushes the free electrons toward the",Yes,"L46,L47,L48,L51,L53","Solar panels generate electricity through a process called the **photovoltaic (PV) effect**, which involves converting sunlight directly into electrical energy using semiconductor materials. Here's a step-by-step explanation of how this works:
+
+---
+
+### 1. **Sunlight Hits the Solar Panel**
+Solar panels are made up of many **solar cells**, typically made from **silicon**, a semiconductor material. When sunlight (composed of **photons**) strikes the surface of a solar cell, it can knock electrons loose from the atoms in the silicon.
+
+---
+
+### 2. **Photovoltaic Effect**
+The solar cell is designed with a **p-n junction** — a boundary between two types of silicon:
+- **P-type silicon** (positive): has an excess of **holes** (positive charge carriers).
+- **N-type silicon** (negative): has an excess of **electrons** (negative charge carriers).
+
+When photons hit the cell, they transfer their energy to electrons in the silicon. If the energy is enough, the electrons break free from their atoms and move across the p-n junction, creating a **flow of electric current**.
+
+---
+
+### 3. **Electric Current is Generated**
+The movement of electrons creates a **direct current (DC)**. Metal conductive plates"
+44,What is the difference between a virus and a bacterium?,"The difference between a **virus** and a **bacterium** lies in their **structure**, **function**, and **how they interact with living organisms**. Here's a clear breakdown:
+
+---
+
+### **1. Structure**
+
+| Feature | **Virus** | **Bacterium** |
+|--------|-----------|----------------|
+| **Cell Type** | Not a cell; an acellular particle | A single-celled (prokaryotic) organism |
+| **Cell Wall** | No | Yes (in most cases) |
+| **Cell Membrane** | No | Yes |
+| **Cytoplasm** | No | Yes |
+| **Genetic Material** | DNA or RNA (never both) | Always DNA |
+| **Reproduction** | Cannot reproduce on its own; requires a host cell | Can reproduce on its own (binary fission) |
+| **Size** | Much smaller (nanometers) | Larger (micrometers) |
+
+---
+
+### **2. Function and Lifestyle**
+
+| Feature | **Virus** | **Bacterium** |
+|--------|-----------|----------------|
+| **Lifestyle** | Obligate intracellular parasite | Can be free-living or parasitic |
+| **Metabolism** | No",Yes,"L46,L47,L50,L51,L52","The difference between a **virus** and a **bacterium** lies in their **structure**, **function**, and **how they interact with living organisms**. Here's a clear breakdown:
+
+---
+
+### **1. Structure**
+
+| Feature | **Virus** | **Bacterium** |
+|--------|-----------|----------------|
+| **Cell Type** | Not a cell; an acellular particle | A single-celled (prokaryotic) organism |
+| **Cell Wall** | No | Yes (in most cases) |
+| **Cell Membrane** | No | Yes |
+| **Cytoplasm** | No | Yes |
+| **Genetic Material** | DNA or RNA (never both) | Always DNA |
+| **Reproduction** | Cannot reproduce on its own; requires a host cell | Can reproduce on its own (binary fission) |
+| **Size** | Much smaller (nanometers) | Larger (micrometers) |
+
+---
+
+### **2. Function and Lifestyle**
+
+| Feature | **Virus** | **Bacterium** |
+|--------|-----------|----------------|
+| **Lifestyle** | Obligate intracellular parasite | Can be free-living or parasitic |
+| **Metabolism** | No"
+45,How do I write a good cover letter?,"Writing a **good cover letter** is a powerful way to **complement your resume** and **stand out to employers**. A well-crafted cover letter shows your **interest in the role**, **understanding of the company**, and **what you can bring to the table**. Here's a step-by-step guide to help you write a strong cover letter:
+
+---
+
+## 📝 **1. Start with Your Contact Information**
+
+At the top of the letter, include:
+
+- Your full name
+- Your address (optional)
+- Your phone number
+- Your email address
+- LinkedIn profile or portfolio (if relevant)
+
+**Example:**
+
+```
+Jane Doe  
+123 Main Street  
+New York, NY 10001  
+(555) 123-4567  
+jane.doe@email.com  
+linkedin.com/in/janedoe
+```
+
+---
+
+## 📧 **2. Add the Hiring Manager’s Contact Information**
+
+Include:
+
+- Hiring manager’s name (if possible)
+- Company name
+- Company address
+- Date
+
+**Tip:** If you can’t find the hiring manager’s name, use “Dear Hiring Manager” or “Dear [Department Name] Team.”
+
+---
+
+## 📌",No,,NA
+46,What causes ocean tides?,"Ocean tides are primarily caused by the **gravitational pull of the Moon** and, to a lesser extent, the **Sun** on Earth's oceans. Here's a breakdown of the main factors:
+
+---
+
+### 1. **Gravitational Pull of the Moon**
+- The Moon's gravity exerts a force on Earth, pulling on the water in the oceans.
+- This gravitational force is strongest on the side of Earth facing the Moon, causing a **bulge of water** (high tide).
+- On the **opposite side** of Earth (the side facing away from the Moon), the Moon's gravity is weakest, and the Earth is pulled slightly toward the Moon, leaving a **second bulge** on the far side (also a high tide).
+- The areas between these two bulges experience **low tides**.
+
+---
+
+### 2. **Earth's Rotation**
+- As Earth rotates on its axis, different parts of the planet pass through these high and low tide bulges.
+- This rotation causes most coastal areas to experience **two high tides and two low tides** each day (approximately every 12 hours and 25 minutes).
+
+---
+
+### 3. **Influence of the Sun**
+- The Sun also exerts",Yes,"L46,L47,L48,L51,L52,L53","Ocean tides are primarily caused by the **gravitational pull of the Moon** and, to a lesser extent, the **Sun** on Earth's oceans. Here's a breakdown of the main factors:
+
+---
+
+### 1. **Gravitational Pull of the Moon**
+- The Moon's gravity exerts a force on Earth, pulling on the water in the oceans.
+- This gravitational force is strongest on the side of Earth facing the Moon, causing a **bulge of water** (high tide).
+- On the **opposite side** of Earth (the side facing away from the Moon), the Moon's gravity is weakest, and the Earth is pulled slightly toward the Moon, leaving a **second bulge** on the far side (also a high tide).
+- The areas in between these bulges experience **low tides**.
+
+---
+
+### 2. **Earth's Rotation**
+- As Earth rotates on its axis, different parts of the planet pass through these bulges and troughs of water.
+- This rotation causes most coastal areas to experience **two high tides and two low tides** each day (a **semidiurnal tide**).
+
+---
+
+### 3. **Influence of the Sun**
+- The Sun also exerts a gravitational pull"
+47,How does memory work in the human brain?,"Memory in the human brain is a complex and dynamic process that involves encoding, storing, and retrieving information. It is essential for learning, decision-making, and adapting to our environment. Here's a breakdown of how memory works in the human brain:
+
+---
+
+### **1. Types of Memory**
+
+There are several types of memory, each serving a different function:
+
+#### **a. Sensory Memory**
+- **Duration:** A fraction of a second to a few seconds.
+- **Function:** Holds sensory information (e.g., sights, sounds) just long enough for the brain to process it.
+- **Example:** Remembering the sound of a car horn after it has passed.
+
+#### **b. Short-Term Memory (STM)**
+- **Duration:** About 15–30 seconds unless rehearsed.
+- **Capacity:** Limited (about 7±2 items).
+- **Function:** Temporarily holds information for immediate use.
+- **Example:** Remembering a phone number long enough to dial it.
+
+#### **c. Working Memory**
+- **Duration:** A few seconds to a minute.
+- **Function:** A more active form of short-term memory that allows manipulation of information (e.g., solving a math problem).
+- **Brain Region:** Prefrontal cortex",Yes,"L46,L47,L48,L49,L50,L51,L52,L53","Memory in the human brain is a complex and dynamic process that involves encoding, storing, and retrieving information. It is essential for learning, decision-making, and adapting to our environment. Here's a breakdown of how memory works in the human brain:
+
+---
+
+### **1. Types of Memory**
+
+There are several types of memory, each serving a different function:
+
+#### **a. Sensory Memory**
+- **Duration:** A fraction of a second to a few seconds.
+- **Function:** Holds sensory information (e.g., sights, sounds) just long enough for the brain to process it.
+- **Example:** Remembering the sound of a car horn after it has passed.
+
+#### **b. Short-Term Memory (STM)**
+- **Duration:** About 15–30 seconds unless rehearsed.
+- **Capacity:** Limited (about 7±2 items).
+- **Function:** Temporarily holds information for immediate use.
+- **Example:** Remembering a phone number long enough to dial it.
+
+#### **c. Working Memory**
+- **Duration:** A few seconds to a minute.
+- **Function:** A more active form of short-term memory that allows manipulation of information (e.g., solving a math problem).
+- **Brain Region:** Prefrontal cortex"
+48,What is the theory of evolution?,"The **theory of evolution** is a scientific explanation for how species of living organisms change over time through a process called **natural selection**. It is one of the most fundamental and well-supported theories in biology, developed and refined over the past 150 years.
+
+---
+
+### **Key Concepts of the Theory of Evolution:**
+
+1. **Descent with Modification**  
+   All species are related through common ancestry and have changed over time. This means that modern species have evolved from earlier, often very different, species.
+
+2. **Natural Selection**  
+   Proposed by **Charles Darwin** in his 1859 book *On the Origin of Species*, natural selection is the mechanism by which evolution occurs. It works as follows:
+   - Individuals in a population vary in their traits.
+   - Some of these traits are heritable (can be passed on to offspring).
+   - In each generation, more offspring are born than can survive.
+   - Individuals with traits that are better suited to their environment are more likely to survive and reproduce.
+   - These advantageous traits become more common in the population over time.
+
+3. **Genetic Variation**  
+   Evolution relies on genetic differences within a population. These variations arise from:
+   - Mutations (random changes in",No,,NA
+49,How do I start learning to play guitar?,"Learning to play the guitar is a fun and rewarding journey! Here's a step-by-step guide to help you get started:
+
+---
+
+## 🎸 **1. Choose the Right Guitar**
+Before you start, you need a guitar that suits your needs and budget.
+
+### Types of Guitars:
+- **Acoustic Guitar**: Great for beginners, no electricity needed. Ideal for strumming and fingerpicking.
+- **Electric Guitar**: Requires an amp. Offers more tonal variety and is popular in rock, blues, and metal.
+- **Classical Guitar**: Nylon strings, used for classical and flamenco music.
+
+### Tips:
+- **Budget**: A good beginner guitar can cost between $100–$300.
+- **Size**: Make sure the guitar is the right size for your body (especially for kids or smaller adults).
+- **Buy from a reputable store** or online retailer with good return policies.
+
+---
+
+## 🎧 **2. Learn the Basics**
+Start with the fundamentals to build a strong foundation.
+
+### Key Concepts to Learn:
+- **Parts of the guitar** (headstock, tuning pegs, fretboard, frets, strings, body)
+- **How to hold the guitar** (sitting posture, str",Yes,"L46,L47,L48,L50,L51,L52","Learning to play the guitar is a fun and rewarding journey! Here's a step-by-step guide to help you get started:
+
+---
+
+## 🎸 **1. Choose the Right Guitar**
+Before you start, you need a guitar that suits your needs and budget.
+
+### Types of Guitars:
+- **Acoustic Guitar**: Great for beginners, no electricity needed. Ideal for strumming and fingerpicking.
+- **Electric Guitar**: Requires an amp. Offers more tonal variety and is popular in rock, blues, and metal.
+- **Classical Guitar**: Nylon strings, used for classical and flamenco music.
+
+### Tips:
+- **Budget**: A good beginner guitar can cost between $100–$300.
+- **Size**: Make sure the guitar is the right size for your body (especially for kids or smaller adults).
+- **Buy from a reputable store** or online retailer with good reviews.
+
+---
+
+## 🎧 **2. Learn the Basics**
+Start with the fundamentals to build a strong foundation.
+
+### Key Concepts to Learn:
+- **Parts of the guitar** (headstock, tuning pegs, fretboard, frets, strings, body)
+- **How to hold the guitar** (sitting posture, strum"

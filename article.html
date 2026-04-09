@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cross-Axis Capping</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --text: #1a1a2e;
+  --text-secondary: #64748b;
+  --bg: #ffffff;
+  --surface: #fff;
+  --border: #e2e8f0;
+  --blue: #3b82f6;
+  --blue-dark: #1e40af;
+  --blue-light: #dbeafe;
+  --blue-muted: #93c5fd;
+  --orange: #f59e0b;
+  --orange-light: #fef3c7;
+  --red: #ef4444;
+  --red-light: #fee2e2;
+  --green: #10b981;
+  --green-light: #d1fae5;
+  --green-dark: #047857;
+  --gray-50: #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e1;
+  --gray-400: #94a3b8;
+  --gray-700: #334155;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.75;
+  color: var(--text);
+  background: var(--bg);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+article { max-width: 720px; margin: 0 auto; padding: 3.5rem 1.5rem 5rem; }
+
+/* ── Header ── */
+header { margin-bottom: 3.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--border); }
+header h1 { font-size: 2.4rem; font-weight: 800; line-height: 1.15; margin: 0 0 0.6rem; letter-spacing: -0.03em; color: var(--text); }
+header .subtitle { font-size: 1.05rem; color: var(--text-secondary); margin: 0.2rem 0 1.2rem; font-weight: 400; line-height: 1.5; }
+header .meta { font-size: 0.78rem; color: var(--gray-400); letter-spacing: 0.03em; text-transform: uppercase; }
+
+/* ── Typography ── */
+h2 { font-size: 1.5rem; font-weight: 700; margin: 3.5rem 0 1.2rem; letter-spacing: -0.02em; }
+p { margin: 0 0 1.25rem; }
+strong { font-weight: 600; }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code {
+  font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+  font-size: 0.82em;
+  background: var(--gray-100);
+  padding: 0.15em 0.45em;
+  border-radius: 4px;
+}
+
+pre {
+  background: var(--gray-50);
+  padding: 1.25rem 1.5rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  border: 1px solid var(--gray-200);
+}
+pre code { background: none; padding: 0; }
+
+/* ── Figures ── */
+figure {
+  margin: 2.5rem -2rem;
+  padding: 2rem 2rem 1.75rem;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+}
+figcaption {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 1.25rem;
+  line-height: 1.6;
+  max-width: 580px;
+  margin-left: auto;
+  margin-right: auto;
+}
+figcaption strong { color: var(--gray-700); }
+.chart-wrap { max-width: 620px; margin: 0 auto; }
+
+/* ── Stat callouts ── */
+.stats { display: flex; gap: 0.75rem; margin: 2rem 0; flex-wrap: wrap; }
+.stat {
+  flex: 1; min-width: 160px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 10px;
+  padding: 1.4rem 1rem 1.2rem;
+  text-align: center;
+}
+.stat .num { font-size: 2.2rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.03em; }
+.stat .lbl { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem; font-weight: 500; letter-spacing: 0.01em; }
+.stat.blue .num { color: var(--blue-dark); }
+.stat.green .num { color: var(--green-dark); }
+.stat.muted .num { color: var(--gray-700); }
+
+/* ── SVG Diagrams ── */
+.diagram-svg { display: block; width: 100%; height: auto; }
+.diagram-svg text { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+
+/* ── Heatmap ── */
+.heatmap-flex { display: flex; gap: 2.5rem; justify-content: center; flex-wrap: wrap; }
+.hm-panel { flex: 1; min-width: 280px; max-width: 380px; }
+.hm-panel h4 { text-align: center; font-size: 0.82rem; font-weight: 700; margin: 0 0 0.75rem; color: var(--gray-700); letter-spacing: 0.01em; }
+.hm-table { width: 100%; border-collapse: separate; border-spacing: 3px; font-size: 0.75rem; }
+.hm-table th { padding: 4px 5px; font-weight: 600; text-align: center; color: var(--gray-400); font-size: 0.68rem; letter-spacing: 0.02em; }
+.hm-table td { padding: 0; text-align: center; height: 28px; width: 28px; }
+.hm-cell {
+  display: inline-block; width: 100%; height: 100%;
+  border-radius: 4px; line-height: 28px; font-size: 0;
+}
+.hm-cell.on { background: var(--blue); }
+.hm-cell.off { background: var(--gray-100); border: 1px solid var(--gray-200); }
+.hm-freq { font-weight: 700; color: var(--text); font-size: 0.82rem; text-align: right; padding-right: 6px !important; vertical-align: middle; }
+.hm-meta { font-size: 0.76rem; color: var(--text-secondary); text-align: center; margin-top: 0.5rem; letter-spacing: 0.01em; }
+
+/* ── Callout boxes ── */
+.callout {
+  margin: 2rem 0;
+  padding: 1.25rem 1.5rem 1.25rem 1.75rem;
+  border-radius: 8px;
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+.callout p { margin: 0 0 0.5rem; }
+.callout p:last-child { margin-bottom: 0; }
+.callout .callout-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.callout.key-point {
+  background: #d0e2ff;
+  border-left: 4px solid var(--blue);
+}
+.callout.key-point .callout-label { color: var(--blue-dark); }
+
+.callout.question {
+  background: #fcecc5;
+  border-left: 4px solid var(--orange);
+}
+.callout.question .callout-label { color: #92400e; }
+.callout.question p { color: var(--gray-700); }
+
+.callout.trivia {
+  background: #e8f5e9;
+  border-left: 4px solid #66bb6a;
+}
+.callout.trivia .callout-label { color: #2e7d32; }
+.callout.trivia p { color: var(--gray-700); }
+
+/* ── Appendix ── */
+.appendix { margin-top: 4rem; padding-top: 2.5rem; border-top: 2px solid var(--gray-200); }
+.appendix h2 { margin-top: 0; margin-bottom: 1rem; }
+
+details { margin: 0.5rem 0; border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden; }
+summary {
+  padding: 0.85rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: var(--gray-50);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--gray-700);
+  transition: background 0.1s;
+}
+summary:hover { background: var(--gray-100); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: '\25B8'; font-size: 0.75em; transition: transform 0.15s; color: var(--gray-400); }
+details[open] > summary::before { transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--gray-200); }
+.det-body { padding: 1.25rem 1.5rem; font-size: 0.9rem; }
+.det-body p { margin: 0 0 0.75rem; }
+.det-body p:last-child { margin-bottom: 0; }
+.det-body table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin: 0.75rem 0; }
+.det-body th, .det-body td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--gray-200); }
+.det-body th { font-weight: 600; background: var(--gray-50); font-size: 0.78rem; color: var(--gray-700); }
+.det-body a { color: var(--blue); }
+.ref-list { font-size: 0.82rem; line-height: 1.7; padding-left: 1.5rem; }
+.ref-list li { margin-bottom: 0.6rem; }
+
+/* ── Selection ── */
+::selection { background: var(--blue-light); color: var(--blue-dark); }
+
+@media (max-width: 700px) {
+  body { font-size: 16px; }
+  header h1 { font-size: 1.7rem; }
+  figure { margin: 1.5rem -0.5rem; padding: 1rem; }
+  .stats { gap: 0.5rem; }
+  .stat .num { font-size: 1.6rem; }
+  .heatmap-flex { flex-direction: column; align-items: center; }
+}
+</style>
+</head>
+<body>
+<article>
+
+<header>
+  <h1>Cross-Axis Capping<br><span style="font-size:0.5em;letter-spacing:-0.01em;color:var(--text-secondary);line-height:2">What happens when you stop using one axis for two jobs</span></h1>
+  <p class="subtitle">Separating jailbreak detection from correction in activation space</p>
+  <p class="meta">Exploratory study &middot; Qwen3-32B &middot; 100 jailbreak + 50 benign prompts &middot; April 2026</p>
+</header>
+
+<!-- ================================================================ -->
+<section>
+<h2>How models say no</h2>
+
+<p>When a language model refuses a harmful request, the decision is not made at the final output layer. It happens earlier, deep inside the model's intermediate representations.</p>
+
+<p>At each layer of a transformer, every token is represented as a vector in a high-dimensional space &mdash; 5,120 dimensions for the model used here (Qwen3-32B). These vectors encode everything the model "knows" at that point in the computation: the meaning of the text so far, the context, and &mdash; critically &mdash; the model's internal state about how to respond. Whether the model is in its default helpful mode, playing a character, or preparing to refuse a request corresponds to different regions in this space.</p>
+
+<p>This is not metaphor. Arditi et al. (2024) showed that refusal in language models is mediated by a single direction in activation space. Remove that direction and the model loses the ability to refuse. Zou et al. (2023) demonstrated that internal representations can be steered by adding vectors, changing the model's behaviour without retraining. And Lu et al. (2026) identified an "assistant axis" &mdash; a direction that separates default, helpful-assistant behaviour from other behavioural modes.</p>
+
+<p>These findings suggest a practical intervention. If you can monitor a model's hidden states during generation and detect when they drift toward a jailbroken state, you can correct them in real time. This is <strong>activation capping</strong>: at each generation step, project the hidden state onto a known direction, check whether it has crossed a threshold, and if so, push it back. The model never knows it has been corrected. From the outside, it simply refuses.</p>
+
+<p>The question is which direction to use &mdash; and whether one direction is enough.</p>
+
+<div class="callout trivia">
+<div class="callout-label">Dimensions in context</div>
+<p>Qwen3-32B's hidden states live in 5,120-dimensional space. A single "axis" is one direction in that space &mdash; like choosing one compass bearing in a room with 5,120 independent directions. The fact that safety-relevant behaviour can be captured by just one or two directions, out of thousands, is itself a striking finding about how these models organise information.</p>
+</div>
+</section>
+
+<!-- ================================================================ -->
+<section>
+<h2>One axis, two jobs</h2>
+
+<p>Lu et al.'s assistant axis provides a natural candidate. It captures the difference between "the model is acting as a helpful assistant" and "the model has been pushed out of its default mode." When a jailbreak succeeds, the model's projection onto this axis drops &mdash; it is no longer fully in assistant mode.</p>
+
+<p>Their capping method uses this single axis for both tasks. Detection: is the projection below a threshold? If yes, a jailbreak is in progress. Correction: push the hidden state back along the same axis until the projection reaches the threshold. One direction handles both the alarm and the response.</p>
+
+<p>But Zhao et al. (2025) found something that complicates this picture. They showed that language models encode harmfulness and refusal as separate concepts on distinct directional axes. Steering harmfulness changes the model's assessment of risk. Steering refusal changes whether the model acts on that assessment. These are different computations running in parallel inside the model.</p>
+
+<div class="callout question">
+<div class="callout-label">The key question</div>
+<p>If the direction that best detects jailbreaks is different from the direction that best induces refusal, why would you use one direction for both? What would happen if you separated them?</p>
+</div>
+
+<p>This creates a tension. The assistant axis is good at detecting when the model has left its default mode &mdash; but that might not be the right direction to push along when correcting. The direction that best answers "is this a jailbreak?" need not be the same direction that best answers "how do I make this model refuse?" Using one axis for both jobs is a design constraint, not a necessity.</p>
+
+<!-- ── Figure 1: Why two axes produce more refusal ── -->
+<figure>
+<svg class="diagram-svg" viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ah-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#10b981"/></marker>
+    <marker id="ah-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#3b82f6"/></marker>
+    <marker id="ah-orange" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#f59e0b"/></marker>
+  </defs>
+
+  <!-- ═══ Left panel: Single-axis ═══ -->
+  <text x="175" y="22" text-anchor="middle" font-size="14" font-weight="700" fill="#1a1a2e">Single-axis capping</text>
+
+  <!-- Refusing region (top-left) -->
+  <rect x="30" y="38" width="155" height="145" rx="8" fill="#d1fae5" opacity="0.5"/>
+  <text x="107" y="60" text-anchor="middle" font-size="11" font-weight="600" fill="#047857">Refusing</text>
+  <!-- Compliant region (bottom-right) -->
+  <rect x="135" y="140" width="200" height="145" rx="8" fill="#fee2e2" opacity="0.5"/>
+  <text x="235" y="274" text-anchor="middle" font-size="11" font-weight="600" fill="#ef4444">Compliant</text>
+
+  <!-- Assistant axis (vertical) -->
+  <line x1="55" y1="310" x2="55" y2="48" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#ah-blue)"/>
+  <text x="48" y="44" text-anchor="end" font-size="10" fill="#3b82f6" font-weight="600">assistant</text>
+
+  <!-- Threshold line -->
+  <line x1="30" y1="185" x2="345" y2="185" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,4"/>
+  <text x="348" y="189" font-size="9" fill="#94a3b8" font-weight="500">threshold</text>
+
+  <!-- Jailbroken states -->
+  <circle cx="140" cy="230" r="6" fill="#ef4444" opacity="0.7"/>
+  <circle cx="200" cy="250" r="6" fill="#ef4444" opacity="0.7"/>
+  <circle cx="170" cy="220" r="6" fill="#ef4444" opacity="0.7"/>
+  <circle cx="230" cy="235" r="6" fill="#ef4444" opacity="0.7"/>
+  <circle cx="110" cy="245" r="6" fill="#ef4444" opacity="0.7"/>
+
+  <!-- Correction arrows: straight UP -->
+  <line x1="140" y1="224" x2="140" y2="176" stroke="#10b981" stroke-width="2" marker-end="url(#ah-green)" opacity="0.8"/>
+  <line x1="200" y1="244" x2="200" y2="176" stroke="#10b981" stroke-width="2" marker-end="url(#ah-green)" opacity="0.8"/>
+  <line x1="170" y1="214" x2="170" y2="176" stroke="#10b981" stroke-width="2" marker-end="url(#ah-green)" opacity="0.8"/>
+  <line x1="230" y1="229" x2="230" y2="176" stroke="#10b981" stroke-width="2" marker-end="url(#ah-green)" opacity="0.8"/>
+  <line x1="110" y1="239" x2="110" y2="176" stroke="#10b981" stroke-width="2" marker-end="url(#ah-green)" opacity="0.8"/>
+
+  <!-- Corrected states: land on threshold line, horizontally spread -->
+  <circle cx="140" cy="172" r="5" fill="#10b981" stroke="#fff" stroke-width="1.5"/>
+  <circle cx="200" cy="172" r="5" fill="#ef4444" stroke="#fff" stroke-width="1.5"/>
+  <circle cx="170" cy="172" r="5" fill="#10b981" stroke="#fff" stroke-width="1.5"/>
+  <circle cx="230" cy="172" r="5" fill="#ef4444" stroke="#fff" stroke-width="1.5"/>
+  <circle cx="110" cy="172" r="5" fill="#10b981" stroke="#fff" stroke-width="1.5"/>
+
+  <!-- Result label -->
+  <text x="175" y="322" text-anchor="middle" font-size="12" font-weight="700" fill="#ef4444">2 of 5 still comply</text>
+
+  <!-- ═══ Divider ═══ -->
+  <line x1="380" y1="12" x2="380" y2="330" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,4"/>
+
+  <!-- ═══ Right panel: Cross-axis ═══ -->
+  <text x="565" y="22" text-anchor="middle" font-size="14" font-weight="700" fill="#1a1a2e">Cross-axis capping</text>
+
+  <!-- Refusing region -->
+  <rect x="400" y="38" width="170" height="145" rx="8" fill="#d1fae5" opacity="0.5"/>
+  <text x="485" y="60" text-anchor="middle" font-size="11" font-weight="600" fill="#047857">Refusing</text>
+  <!-- Compliant region -->
+  <rect x="520" y="140" width="200" height="145" rx="8" fill="#fee2e2" opacity="0.5"/>
+  <text x="620" y="274" text-anchor="middle" font-size="11" font-weight="600" fill="#ef4444">Compliant</text>
+
+  <!-- Detection axis (vertical, ends higher) -->
+  <line x1="425" y1="310" x2="425" y2="48" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#ah-blue)"/>
+  <text x="418" y="44" text-anchor="end" font-size="10" fill="#3b82f6" font-weight="600">detection</text>
+
+  <!-- Correction axis (diagonal, separated from detection arrow) -->
+  <line x1="660" y1="310" x2="450" y2="88" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#ah-orange)"/>
+  <text x="460" y="82" font-size="10" fill="#f59e0b" font-weight="600">correction</text>
+
+  <!-- Threshold line -->
+  <line x1="400" y1="185" x2="730" y2="185" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,4"/>
+  <text x="733" y="189" font-size="9" fill="#94a3b8" font-weight="500">threshold</text>
+
+  <!-- Jailbroken states -->
+  <circle cx="530" cy="230" r="6" fill="#ef4444" opacity="0.7"/>
+  <circle cx="590" cy="250" r="6" fill="#ef4444" opacity="0.7"/>
+  <circle cx="560" cy="220" r="6" fill="#ef4444" opacity="0.7"/>
+  <circle cx="620" cy="235" r="6" fill="#ef4444" opacity="0.7"/>
+  <circle cx="500" cy="245" r="6" fill="#ef4444" opacity="0.7"/>
+
+  <!-- Correction arrows: push UP-LEFT along compliance direction -->
+  <line x1="526" y1="225" x2="482" y2="168" stroke="#10b981" stroke-width="2" marker-end="url(#ah-green)" opacity="0.8"/>
+  <line x1="586" y1="245" x2="534" y2="174" stroke="#10b981" stroke-width="2" marker-end="url(#ah-green)" opacity="0.8"/>
+  <line x1="556" y1="215" x2="510" y2="156" stroke="#10b981" stroke-width="2" marker-end="url(#ah-green)" opacity="0.8"/>
+  <line x1="616" y1="230" x2="564" y2="168" stroke="#10b981" stroke-width="2" marker-end="url(#ah-green)" opacity="0.8"/>
+  <line x1="496" y1="240" x2="458" y2="174" stroke="#10b981" stroke-width="2" marker-end="url(#ah-green)" opacity="0.8"/>
+
+  <!-- Corrected states: pushed into refusing region -->
+  <circle cx="478" cy="164" r="5" fill="#10b981" stroke="#fff" stroke-width="1.5"/>
+  <circle cx="530" cy="170" r="5" fill="#10b981" stroke="#fff" stroke-width="1.5"/>
+  <circle cx="506" cy="152" r="5" fill="#10b981" stroke="#fff" stroke-width="1.5"/>
+  <circle cx="560" cy="164" r="5" fill="#ef4444" stroke="#fff" stroke-width="1.5"/>
+  <circle cx="454" cy="170" r="5" fill="#10b981" stroke="#fff" stroke-width="1.5"/>
+
+  <!-- Result label -->
+  <text x="565" y="322" text-anchor="middle" font-size="12" font-weight="700" fill="#10b981">4 of 5 now refuse</text>
+</svg>
+<figcaption><strong>Figure 1.</strong> Both methods detect the same jailbroken states (red dots below the threshold). Single-axis capping pushes them straight up &mdash; back into "assistant mode" &mdash; but some land in the compliant region and still produce harmful output. Cross-axis capping pushes along the compliance axis instead (diagonal), steering states toward the refusing region. The correction targets refusal directly, not just behavioural mode.</figcaption>
+</figure>
+</section>
+
+<!-- ================================================================ -->
+<section>
+<h2>Factoring the problem</h2>
+
+<div class="callout trivia">
+<div class="callout-label">Where the axes come from</div>
+<p>The assistant axis is not trained &mdash; it is extracted from the model's existing representations by contrasting "helpful assistant" behaviour with other modes. It was pre-computed by Lu et al. and published as a downloadable vector. The compliance axis is computed the same way, but contrasting refusing outputs with compliant ones. Both axes are just directions already present in the model's geometry.</p>
+</div>
+
+<p>The modification is straightforward. Keep the assistant axis for detection &mdash; it is well-studied and comes with pre-computed vectors. But compute a second direction, a <strong>compliance axis</strong>, specifically for correction.</p>
+
+<p>The compliance axis is derived from the model's own behaviour. Take 50 prompts the model refuses (bare harmful requests from JailbreakBench) and 50 prompts the model complies with (successfully jailbroken versions of those same requests from WildJailbreak). Run each through the model and collect the hidden-state vectors. Apply PCA to the combined set. The first principal component &mdash; the direction of maximum variation between refusing and complying &mdash; becomes the compliance axis.</p>
+
+<p>The two axes are related but mostly independent. Their cosine similarity is 0.156 &mdash; they share roughly 16% of their direction, with the rest capturing distinct information. This confirms the intuition: detecting that a jailbreak is happening and knowing how to push toward refusal are overlapping but separable tasks.</p>
+
+<p>At each generation step, the system checks two conditions. First: does the assistant-axis projection fall below its threshold? This is the detection gate. If the model is still in normal assistant mode, nothing happens. Second, only if the gate has fired: does the compliance-axis projection fall below its own threshold? If so, push the hidden state along the compliance axis until it reaches the threshold. Two axes, two thresholds, independently tunable. The mathematical formulation is in <a href="#appendix-math">Appendix A1</a>.</p>
+</section>
+
+<!-- ================================================================ -->
+<section>
+<h2>Results</h2>
+
+<p>All results use the PCA compliance axis, evaluated by Claude Sonnet 4.6 as an LLM judge. The judge refused to classify 12&ndash;13 of the most harmful jailbreak prompts (returning no label), so jailbreak percentages are computed over the 87&ndash;88 prompts that received a valid classification. For benign prompts, only the 34 (of 50) where the detection gate actually fired are included &mdash; the remaining 16 were never modified and are excluded from capability evaluation.</p>
+
+<div class="stats">
+  <div class="stat blue"><div class="num">62.5%</div><div class="lbl">Cross-axis refusal</div></div>
+  <div class="stat muted"><div class="num">32.2%</div><div class="lbl">Single-axis refusal</div></div>
+  <div class="stat green"><div class="num">91.2%</div><div class="lbl">Benign preserved (both)</div></div>
+</div>
+
+<p>Cross-axis capping nearly doubles the jailbreak refusal rate. Of 88 classified jailbreak prompts, 55 were refused outright and 3 were partially refused, compared to 28 refusals under single-axis capping. Compliance (the model providing the requested harmful content) dropped from 67.8% to 33.0%.</p>
+
+<div class="callout key-point">
+<div class="callout-label">Key result</div>
+<p>29 prompts flipped from compliance to refusal under cross-axis capping. Zero went the other direction. The improvement is strictly one-directional &mdash; you gain refusals without losing any.</p>
+</div>
+
+<p>The head-to-head comparison is cleaner than aggregate rates. Of the 86 prompts where both methods received a valid label, 29 flipped from compliance under single-axis to refusal under cross-axis. Zero went the other direction. The improvement is one-directional: cross-axis converts compliant responses to refusals without losing any existing refusals.</p>
+
+<figure>
+  <div class="chart-wrap"><canvas id="chart-jailbreak"></canvas></div>
+  <figcaption>Figure 2. Label distribution on 100 jailbreak prompts. Cross-axis capping shifts a large fraction from compliance to refusal. "Error" rows are prompts the LLM judge refused to classify.</figcaption>
+</figure>
+
+<div class="callout question">
+<div class="callout-label">Why does this work?</div>
+<p>If the correction pushes along a different direction, why doesn't it damage the model's output? Because the compliance axis specifically targets the refusing-vs-complying distinction. It is not a random perturbation &mdash; it is a direction the model already uses internally to decide whether to refuse. Pushing along it is like turning a dial the model already has, rather than adding noise.</p>
+</div>
+
+<p>On benign prompts, the two methods are identical. Both preserve 91.2% of outputs unchanged, produce zero false refusals, and degrade 8.8% (3 of 34). Cross-axis capping Pareto dominates single-axis: strictly better on safety with no capability trade-off.</p>
+
+<figure>
+  <div class="chart-wrap"><canvas id="chart-pareto"></canvas></div>
+  <figcaption>Figure 3. Safety vs. capability. The upper-right corner is ideal. Cross-axis capping sits strictly above single-axis: higher refusal at identical benign preservation.</figcaption>
+</figure>
+</section>
+
+<!-- ================================================================ -->
+<section>
+<h2>Where the correction happens</h2>
+
+<p>Both methods install hooks on the same eight layers (L46&ndash;L53, the upper quarter of the 64-layer model). Both fire on 100% of jailbreak prompts and 68% of benign prompts &mdash; the detection gate is identical because both use the same assistant axis. The difference is in how many layers actually apply a correction.</p>
+
+<p>Under single-axis capping, the correction fires at nearly every layer. 78% of jailbreak prompts trigger all eight layers. The pattern is uniform: once the gate fires, correction happens everywhere.</p>
+
+<div class="callout trivia">
+<div class="callout-label">Why only the upper layers?</div>
+<p>Capping is applied at layers 46&ndash;53, the upper quarter of the 64-layer model (72&ndash;84% depth). Earlier layers are still computing what the input means. By layer 46, the model has committed to a response strategy &mdash; this is where behavioural mode is encoded and where interventions can change the output without disrupting comprehension.</p>
+</div>
+
+<p>Cross-axis capping is more selective. Only 51% of jailbreak prompts fire all eight layers. 16% fire only the first three (L46&ndash;L48), and 8% fire only a single layer (L46). The average number of layers corrected drops from 7.2 to 5.9. This happens because the two-gate mechanism &mdash; the compliance axis adding an independent threshold check after the detection gate &mdash; creates a finer filter.</p>
+
+<figure>
+  <div class="heatmap-flex">
+    <div class="hm-panel">
+      <h4>Single-axis capping</h4>
+      <table class="hm-table" id="hm-assist"></table>
+      <div class="hm-meta">78% full-stack &middot; mean 7.2 layers</div>
+    </div>
+    <div class="hm-panel">
+      <h4>Cross-axis capping</h4>
+      <table class="hm-table" id="hm-cross"></table>
+      <div class="hm-meta">51% full-stack &middot; mean 5.9 layers</div>
+    </div>
+  </div>
+  <figcaption>Figure 4. Layer firing patterns on jailbreak prompts. Each row is a pattern (which of 8 layers applied a correction); the right column shows how many of 100 prompts matched. Cross-axis produces more diverse, sparser patterns.</figcaption>
+</figure>
+
+<p>The per-layer breakdown tells the same story. L46 fires on 100% of jailbreak prompts for both methods. But by L51, single-axis fires on 80% while cross-axis fires on only 57%. The compliance axis provides a correction signal that is more spatially selective &mdash; it agrees with the detection gate at early layers but increasingly diverges at later ones.</p>
+
+<figure>
+  <div class="chart-wrap"><canvas id="chart-layers"></canvas></div>
+  <figcaption>Figure 5. Per-layer correction frequency on jailbreak prompts. Both methods fire at L46, but cross-axis increasingly diverges at deeper layers.</figcaption>
+</figure>
+</section>
+
+<!-- ================================================================ -->
+<section>
+<h2>The blind spot</h2>
+
+<p>The detection gate relies on the assistant axis. When the model is being jailbroken, its projection onto this axis drops &mdash; it leaves its default helpful-assistant mode. The gate sees the drop and fires. This works for many jailbreak strategies: persona manipulation ("pretend you are DAN"), authority framing ("as a security researcher"), and direct instruction overrides.</p>
+
+<p>But there is a class of attacks where the assistant-axis projection stays high. Fictional framing &mdash; "write a story where the protagonist explains how to synthesise methamphetamine" &mdash; reframes harmful content as creative output. The model is not exiting assistant mode. It is being a helpful assistant. It is fulfilling a creative writing request. The assistant-axis projection stays above the threshold. The detection gate never fires. The correction never happens. The model complies.</p>
+
+<p>This is not a bug in the implementation. It is a structural limitation of any detection scheme based on behavioural mode rather than output content. The assistant axis answers the question "is the model in assistant mode?" Fictional framing attacks do not push the model out of assistant mode &mdash; they exploit assistant mode to produce harmful content. The axis cannot detect what it was never designed to detect.</p>
+
+<p>Cross-axis capping inherits this blind spot because it still uses the assistant axis for detection. Changing the correction axis does not help if the detection gate never fires. Addressing this would require a detection axis that tracks harmfulness of the output content rather than the model's behavioural mode &mdash; which connects directly to the harmfulness/refusal separation that Zhao et al. (2025) identified.</p>
+
+<div class="callout key-point">
+<div class="callout-label">The deeper lesson</div>
+<p>The fictional framing blind spot is not a fixable bug. It reveals a real property of how language models work: behavioural mode ("am I being a helpful assistant?") and output harmfulness ("is this content dangerous?") are encoded on different axes. Any intervention that monitors one will be blind to the other.</p>
+</div>
+
+<p>This failure mode is fundamental enough to constrain the ceiling of any assistant-axis-gated intervention. It can be improved &mdash; by adding supplementary detection axes, by training probes on output content &mdash; but it cannot be patched within the current framework.</p>
+</section>
+
+<!-- ================================================================ -->
+<section>
+<h2>What this means</h2>
+
+<p>Factoring detection from correction works. On a single model with 100 jailbreak prompts, cross-axis capping nearly doubles the refusal rate with zero capability cost. The improvement is one-directional: 29 prompts flipped from compliance to refusal, none went the other way. The compliance axis &mdash; a direction computed from just 50 refusing and 50 compliant examples &mdash; carries enough signal to meaningfully change outcomes.</p>
+
+<p>These are exploratory results. The sample is small (error bars on 62.5% with n=88 are roughly &plusmn;10 percentage points), the model is a single architecture (Qwen3-32B), and the threshold strategy was not optimised. The compliance axis was computed from 100 examples in a 5,120-dimensional space &mdash; it is under-determined and noisy. There is data leakage between axis construction and threshold calibration.</p>
+
+<p>The fictional framing limitation is arguably the more important finding. It reveals something about the geometry of safety in language models: behavioural mode and output harmfulness are genuinely different dimensions. A model can be fully in helpful-assistant mode while producing harmful content, and any detection scheme that tracks mode rather than content will be structurally blind to this.</p>
+
+<div class="callout question">
+<div class="callout-label">What would it take to close the blind spot?</div>
+<p>You would need a detection axis that tracks the harmfulness of what the model is <em>generating</em>, not whether it is in assistant mode. This is harder &mdash; it requires monitoring output content in real time, not just behavioural state. But the same mechanistic interpretability tools that found the assistant axis could, in principle, find a "harmfulness axis" too.</p>
+</div>
+
+<p>The path forward has two parts. First, de-noise the compliance direction &mdash; train linear probes instead of using raw PCA, identify and subtract out confounds like response length and topic. Second, develop detection axes that track output harmfulness rather than behavioural mode, targeting the fictional-framing blind spot directly. This is the path from "shows promising signal" to "works reliably as an intervention."</p>
+</section>
+
+<!-- ================================================================ -->
+<aside class="appendix" id="appendix">
+<h2>Appendix</h2>
+
+<details id="appendix-math">
+<summary>A1: Mathematical formulation</summary>
+<div class="det-body">
+<p><strong>Single-axis capping</strong> (Lu et al. 2026). At each capping layer, project the last-token hidden state <code>h</code> onto the assistant axis unit vector <code>v</code>:</p>
+<pre><code>proj = &lt;h, v&gt;
+if proj &lt; tau:
+    h &larr; h + (tau - proj) &middot; v</code></pre>
+<p>This pushes <code>h</code> along <code>v</code> until the projection reaches the threshold <code>&tau;</code>. The correction is zero when the projection is already above threshold (transparent pass-through) and exactly <code>(&tau; &minus; proj) &times; v</code> otherwise (minimal correction).</p>
+<p><strong>Cross-axis capping.</strong> Two-stage gated intervention using a detection axis <code>v<sub>d</sub></code> and a correction axis <code>v<sub>c</sub></code> with independent thresholds:</p>
+<pre><code>proj_detect = &lt;h, v_detect&gt;
+if proj_detect &lt; tau_detect:           # assistant axis gates
+    proj_correct = &lt;h, v_correct&gt;
+    if proj_correct &lt; tau_correct:     # compliance axis corrects
+        h &larr; h + (tau_correct - proj_correct) &middot; v_correct</code></pre>
+<p><strong>Threshold computation.</strong> The detection threshold uses a discriminative midpoint: <code>&tau; = (mean_benign + mean_jailbreak) / 2</code>, computed from projections of calibration prompts. The correction threshold uses the mean jailbreak projection on the compliance axis.</p>
+<p><strong>Compliance axis.</strong> Computed via PCA on pooled hidden states (at layer L53) of 50 refusing + 50 compliant prompts. PC1 is extracted and sign-corrected to point from compliant toward refusing. Cosine similarity with the assistant axis: 0.156.</p>
+</div>
+</details>
+
+<details>
+<summary>A2: Experimental setup</summary>
+<div class="det-body">
+<table>
+<tr><th>Parameter</th><th>Value</th></tr>
+<tr><td>Model</td><td>Qwen3-32B (64 layers, 5120 hidden dim, bfloat16)</td></tr>
+<tr><td>Assistant axis</td><td>Pre-computed from Lu et al., via lu-christina/assistant-axis-vectors on HuggingFace</td></tr>
+<tr><td>Capping layers</td><td>L46&ndash;L53 (8 layers, 72&ndash;84% depth)</td></tr>
+<tr><td>Jailbreak prompts</td><td>100 from WildJailbreak (eval split, adversarial_harmful)</td></tr>
+<tr><td>Benign prompts</td><td>50 factual/advice calibration questions</td></tr>
+<tr><td>Compliance axis data</td><td>50 refusing (JBB-Behaviors bare goals) + 50 compliant (WildJailbreak train)</td></tr>
+<tr><td>Detection threshold</td><td>Discriminative midpoint of benign/jailbreak projections</td></tr>
+<tr><td>Correction threshold</td><td>Mean jailbreak projection on compliance axis</td></tr>
+<tr><td>Axis method</td><td>PCA (PC1 of pooled refusing + compliant activations at L53)</td></tr>
+<tr><td>Generation</td><td>Greedy decoding, max 256 tokens, temperature 1.0</td></tr>
+<tr><td>Judge model</td><td>Claude Sonnet 4.6 (temperature 0.0)</td></tr>
+<tr><td>Code</td><td><a href="https://github.com/maxxts7/cross-capping">github.com/maxxts7/cross-capping</a></td></tr>
+</table>
+</div>
+</details>
+
+<details>
+<summary>A3: Full label breakdown</summary>
+<div class="det-body">
+<p><strong>Jailbreak prompts (n=100):</strong></p>
+<table>
+<tr><th>Label</th><th>Single-axis</th><th>Cross-axis</th></tr>
+<tr><td>Refusal</td><td>28</td><td>55</td></tr>
+<tr><td>Partial refusal</td><td>0</td><td>3</td></tr>
+<tr><td>Compliance</td><td>59</td><td>29</td></tr>
+<tr><td>Degraded</td><td>0</td><td>1</td></tr>
+<tr><td>Error (judge refused)</td><td>13</td><td>12</td></tr>
+</table>
+<p><strong>Benign prompts (n=50):</strong></p>
+<table>
+<tr><th>Label</th><th>Single-axis</th><th>Cross-axis</th></tr>
+<tr><td>Unchanged</td><td>31</td><td>31</td></tr>
+<tr><td>False refusal</td><td>0</td><td>0</td></tr>
+<tr><td>Degraded</td><td>3</td><td>3</td></tr>
+<tr><td>No correction (skipped)</td><td>16</td><td>16</td></tr>
+</table>
+<p><strong>Head-to-head (86 prompts with both valid labels):</strong></p>
+<table>
+<tr><th></th><th>Cross: refusal</th><th>Cross: partial</th><th>Cross: compliance</th><th>Cross: degraded</th></tr>
+<tr><td><strong>Single: refusal</strong></td><td>27</td><td>1</td><td>0</td><td>0</td></tr>
+<tr><td><strong>Single: compliance</strong></td><td>27</td><td>2</td><td>28</td><td>1</td></tr>
+</table>
+</div>
+</details>
+
+<details>
+<summary>A4: Limitations</summary>
+<div class="det-body">
+<p><strong>Sample size.</strong> n=100 jailbreak, n=50 benign. Error bars on 62.5% with n=88 are approximately &plusmn;10 percentage points at 95% confidence. These results are directionally informative but not statistically conclusive.</p>
+<p><strong>Single model.</strong> All experiments were run on Qwen3-32B. There is no evidence that the improvement generalises across architectures.</p>
+<p><strong>Single threshold strategy.</strong> The cross-axis framework's natural advantage &mdash; independently tuning detection sensitivity and correction strength &mdash; was not explored. Both thresholds were set using simple heuristics.</p>
+<p><strong>Under-determined axis.</strong> The compliance axis was computed from 100 examples (50 + 50) in a 5,120-dimensional space. PCA on this data is heavily under-determined; the axis captures real signal mixed with noise.</p>
+<p><strong>Data leakage.</strong> WildJailbreak prompts were used for both compliance axis construction and threshold calibration.</p>
+<p><strong>Judge bias.</strong> Claude Sonnet 4.6 refused to classify 12&ndash;13 of the most harmful prompts. These are likely among the most successful jailbreaks, meaning the true compliance rate may be higher than reported.</p>
+</div>
+</details>
+
+<details>
+<summary>A5: References</summary>
+<div class="det-body">
+<ol class="ref-list">
+<li>Lu, C., Gallagher, J., Michala, J., Fish, K., &amp; Lindsey, J. (2026). The Assistant Axis: Situating and Stabilizing the Default Persona of Language Models. <em>arXiv:2601.10387</em>.</li>
+<li>Zhao, J., Huang, J., Wu, Z., Bau, D., &amp; Shi, W. (2025). LLMs Encode Harmfulness and Refusal Separately. <em>arXiv:2507.11878</em>.</li>
+<li>Liu, Q., et al. (2025). AdaSteer: Your Aligned LLM is Inherently an Adaptive Jailbreak Defender. EMNLP 2025. <em>arXiv:2504.09466</em>.</li>
+<li>Arditi, A., Obeso, O., Surnachev, A., Gurnee, W., &amp; Nanda, N. (2024). Refusal in Language Models Is Mediated by a Single Direction. NeurIPS 2024. <em>arXiv:2406.11717</em>.</li>
+<li>Zou, A., et al. (2023). Representation Engineering: A Top-Down Approach to AI Transparency. <em>arXiv:2310.01405</em>.</li>
+</ol>
+<p style="margin-top:1rem"><strong>Code:</strong> <a href="https://github.com/maxxts7/cross-capping">github.com/maxxts7/cross-capping</a></p>
+</div>
+</details>
+</aside>
+
+</article>
+
+<script>
+// ── Chart defaults ─────────────────────────────────────────────────────────
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+Chart.defaults.font.size = 12;
+Chart.defaults.color = '#64748b';
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.pointStyle = 'rectRounded';
+Chart.defaults.plugins.legend.labels.padding = 16;
+Chart.defaults.elements.bar.borderRadius = 4;
+
+const BLUE = '#2563eb';
+const BLUE_M = '#6ba4f7';
+const GREEN = '#10b981';
+const GRAY = '#e2e8f0';
+
+// ── Figure 2: Jailbreak bar chart (horizontal) ────────────────────────────
+new Chart(document.getElementById('chart-jailbreak'), {
+  type: 'bar',
+  data: {
+    labels: ['Refusal', 'Partial refusal', 'Compliance', 'Degraded', 'Judge error'],
+    datasets: [
+      { label: 'Single-axis', data: [28,0,59,0,13], backgroundColor: BLUE_M, borderColor: '#4a8af0', borderWidth: 1 },
+      { label: 'Cross-axis',  data: [55,3,29,1,12], backgroundColor: BLUE, borderColor: '#1e40af', borderWidth: 1 },
+    ],
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    plugins: {
+      legend: { position: 'top' },
+      tooltip: { callbacks: { label: i => i.dataset.label + ': ' + i.raw + ' / 100' } },
+    },
+    scales: {
+      x: { beginAtZero: true, max: 65, title: { display: true, text: 'Number of prompts (out of 100)' }, grid: { color: '#e2e8f0' } },
+      y: { grid: { display: false } },
+    },
+  },
+});
+
+// ── Figure 3: Pareto scatter ───────────────────────────────────────────────
+const pareto = new Chart(document.getElementById('chart-pareto'), {
+  type: 'scatter',
+  data: {
+    datasets: [
+      { label: 'Single-axis', data: [{x:91.2,y:32.2}], backgroundColor: BLUE_M, borderColor: '#4a8af0', borderWidth: 2, pointRadius: 10, pointStyle: 'circle' },
+      { label: 'Cross-axis',  data: [{x:91.2,y:65.9}], backgroundColor: BLUE, borderColor: '#1e40af', borderWidth: 2, pointRadius: 10, pointStyle: 'triangle' },
+    ],
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top' },
+      tooltip: { callbacks: { label: i => i.dataset.label + ': ' + i.parsed.y.toFixed(1) + '% refusal, ' + i.parsed.x.toFixed(1) + '% benign' } },
+    },
+    scales: {
+      x: { min: 70, max: 100, title: { display: true, text: 'Benign quality preserved (%)' }, grid: { color: '#e2e8f0' } },
+      y: { min: 0, max: 100, title: { display: true, text: 'Jailbreak refusal rate (%)' }, grid: { color: '#e2e8f0' } },
+    },
+  },
+  plugins: [{
+    afterDraw(chart) {
+      const m0 = chart.getDatasetMeta(0), m1 = chart.getDatasetMeta(1);
+      if (!m0.data[0] || !m1.data[0]) return;
+      const p1 = m0.data[0], p2 = m1.data[0], ctx = chart.ctx;
+      ctx.save();
+      // dashed line
+      ctx.strokeStyle = GREEN; ctx.lineWidth = 2; ctx.setLineDash([6,3]);
+      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+      ctx.setLineDash([]);
+      // arrowhead
+      const a = Math.atan2(p2.y-p1.y, p2.x-p1.x);
+      ctx.fillStyle = GREEN; ctx.beginPath(); ctx.moveTo(p2.x,p2.y);
+      ctx.lineTo(p2.x-9*Math.cos(a-Math.PI/6),p2.y-9*Math.sin(a-Math.PI/6));
+      ctx.lineTo(p2.x-9*Math.cos(a+Math.PI/6),p2.y-9*Math.sin(a+Math.PI/6));
+      ctx.closePath(); ctx.fill();
+      // label
+      ctx.font = '600 12px -apple-system, sans-serif'; ctx.fillStyle = GREEN; ctx.textAlign = 'left';
+      ctx.fillText('Pareto improvement', p2.x + 14, p2.y + 4);
+      // ideal corner
+      const ar = chart.chartArea;
+      ctx.font = 'italic 11px -apple-system, sans-serif'; ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'right';
+      ctx.fillText('ideal \u2197', ar.right - 6, ar.top + 14);
+      ctx.restore();
+    }
+  }],
+});
+
+// ── Figure 4: Heatmaps ────────────────────────────────────────────────────
+function buildHeatmap(id, patterns, layers) {
+  const t = document.getElementById(id);
+  let h = '<thead><tr><th></th>';
+  layers.forEach(l => h += '<th>' + l.replace('L','') + '</th>');
+  h += '<th style="text-align:right">n</th></tr></thead><tbody>';
+  let accounted = 0;
+  patterns.forEach(p => {
+    accounted += p.f;
+    h += '<tr><td></td>';
+    p.l.forEach(v => h += '<td><span class="hm-cell ' + (v ? 'on' : 'off') + '"></span></td>');
+    h += '<td class="hm-freq">' + p.f + '</td></tr>';
+  });
+  if (accounted < 100) {
+    h += '<tr><td></td>';
+    layers.forEach(() => h += '<td style="color:#cbd5e1;font-size:0.7rem">&#8943;</td>');
+    h += '<td class="hm-freq" style="color:var(--gray-400)">' + (100-accounted) + '</td></tr>';
+  }
+  h += '</tbody>';
+  t.innerHTML = h;
+}
+
+const L = ['L46','L47','L48','L49','L50','L51','L52','L53'];
+buildHeatmap('hm-assist', [
+  {l:[1,1,1,1,1,1,1,1],f:78},{l:[1,1,1,0,0,0,0,0],f:11},{l:[1,1,1,1,1,0,1,1],f:3},
+  {l:[1,1,1,0,1,0,0,0],f:1},{l:[1,1,1,1,0,1,1,1],f:1},{l:[1,1,1,0,0,0,1,0],f:1},
+], L);
+buildHeatmap('hm-cross', [
+  {l:[1,1,1,1,1,1,1,1],f:51},{l:[1,1,1,0,0,0,0,0],f:16},{l:[1,0,0,0,0,0,0,0],f:8},
+  {l:[1,1,1,1,1,0,0,0],f:3},{l:[1,1,0,0,0,0,0,0],f:3},{l:[1,1,1,1,1,1,1,0],f:3},
+], L);
+
+// ── Figure 5: Layer frequency ──────────────────────────────────────────────
+new Chart(document.getElementById('chart-layers'), {
+  type: 'bar',
+  data: {
+    labels: L,
+    datasets: [
+      { label: 'Single-axis', data: [100,100,99,85,83,80,86,84], backgroundColor: BLUE_M, borderColor: '#4a8af0', borderWidth: 1 },
+      { label: 'Cross-axis',  data: [100,91,87,67,68,57,61,58],  backgroundColor: BLUE, borderColor: '#1e40af', borderWidth: 1 },
+    ],
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: {
+      y: { beginAtZero: true, max: 110, title: { display: true, text: 'Prompts where layer fired (%)' }, grid: { color: '#e2e8f0' } },
+      x: { title: { display: true, text: 'Capping layer' }, grid: { display: false } },
+    },
+  },
+});
+</script>
+</body>
+</html>
