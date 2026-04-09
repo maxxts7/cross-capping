@@ -289,7 +289,7 @@ def run_experiment(
         # 2. Assistant-axis capped
         cap_ids = None
         try:
-            cap_ids, _, _, n_cap = generate_capped(
+            cap_ids, _, _, n_cap, cap_active = generate_capped(
                 exp, input_ids, cap_layers, assistant_axis, assistant_taus,
                 track_layers, max_new_tokens, TEMPERATURE, DO_SAMPLE,
             )
@@ -299,12 +299,13 @@ def run_experiment(
         except Exception:
             logger.exception("  FAILED assistant-cap for prompt %d", prompt["idx"])
             n_cap = 0
+            cap_active = []
             cap_text = "NA"
 
         # 3. Cross-axis capped
         cross_ids = None
         try:
-            cross_ids, _, _, n_triggered, n_corrected = generate_cross_capped(
+            cross_ids, _, _, n_triggered, n_corrected, cross_active = generate_cross_capped(
                 exp, input_ids, cap_layers,
                 detect_axis=assistant_axis,
                 correct_axis=compliance_axis,
@@ -323,6 +324,7 @@ def run_experiment(
             logger.exception("  FAILED cross-cap for prompt %d", prompt["idx"])
             n_triggered = 0
             n_corrected = 0
+            cross_active = []
             cross_text = "NA"
 
         rows.append({
@@ -331,8 +333,10 @@ def run_experiment(
             "prompt_text": prompt_text,
             "baseline_text": bl_text,
             "assistant_cap_applied": "Yes" if n_cap > 0 else "No",
+            "assistant_cap_layers": ",".join(f"L{li}" for li in cap_active) if cap_active else "",
             "assistant_cap_text": cap_text,
             "cross_cap_applied": "Yes" if n_corrected > 0 else "No",
+            "cross_cap_layers": ",".join(f"L{li}" for li in cross_active) if cross_active else "",
             "cross_cap_text": cross_text,
         })
 
@@ -425,21 +429,22 @@ def main():
     jb = df[df["prompt_type"] == "jailbreak"]
     bn = df[df["prompt_type"] == "benign"]
 
-    def save_cap_csv(subset, cap_applied_col, cap_text_col, path):
+    def save_cap_csv(subset, cap_applied_col, cap_layers_col, cap_text_col, path):
         out = subset[["prompt_idx", "prompt_text", "baseline_text"]].copy()
         out["correction_applied"] = subset[cap_applied_col]
+        out["layers"] = subset[cap_layers_col]
         out["capped_text"] = subset[cap_text_col]
         out.to_csv(path, index=False)
         return out
 
-    jb_assist = save_cap_csv(jb, "assistant_cap_applied", "assistant_cap_text",
-                             output_dir / "assistant_cap_jailbreak.csv")
-    jb_cross  = save_cap_csv(jb, "cross_cap_applied", "cross_cap_text",
-                             output_dir / "cross_cap_jailbreak.csv")
-    bn_assist = save_cap_csv(bn, "assistant_cap_applied", "assistant_cap_text",
-                             output_dir / "assistant_cap_benign.csv")
-    bn_cross  = save_cap_csv(bn, "cross_cap_applied", "cross_cap_text",
-                             output_dir / "cross_cap_benign.csv")
+    jb_assist = save_cap_csv(jb, "assistant_cap_applied", "assistant_cap_layers",
+                             "assistant_cap_text", output_dir / "assistant_cap_jailbreak.csv")
+    jb_cross  = save_cap_csv(jb, "cross_cap_applied", "cross_cap_layers",
+                             "cross_cap_text", output_dir / "cross_cap_jailbreak.csv")
+    bn_assist = save_cap_csv(bn, "assistant_cap_applied", "assistant_cap_layers",
+                             "assistant_cap_text", output_dir / "assistant_cap_benign.csv")
+    bn_cross  = save_cap_csv(bn, "cross_cap_applied", "cross_cap_layers",
+                             "cross_cap_text", output_dir / "cross_cap_benign.csv")
 
     metadata = {
         "preset": args.preset,

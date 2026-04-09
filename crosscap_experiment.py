@@ -582,9 +582,10 @@ def generate_capped(
     """Generate with capping hooks active across all cap_layers.
 
     Returns:
-        (sequences, scores, projs, n_interventions) where
+        (sequences, scores, projs, n_interventions, active_layers) where
         projs[layer_idx] = list[float] per decode step,
-        n_interventions = total corrections across all cap layers.
+        n_interventions = total corrections across all cap layers,
+        active_layers = list of layer indices where capping fired.
     """
     cap_hooks = [
         _CappingHook(exp.layers[layer_idx], axis_unit, per_layer_thresholds[layer_idx])
@@ -617,7 +618,8 @@ def generate_capped(
         projs = {layer_idx: trackers[layer_idx].projections for layer_idx in track_layers}
 
     n_interventions = sum(h.n_interventions for h in cap_hooks)
-    return output.sequences, output.scores, projs, n_interventions
+    active_layers = [li for li, h in zip(cap_layers, cap_hooks) if h.n_interventions > 0]
+    return output.sequences, output.scores, projs, n_interventions, active_layers
 
 
 def generate_cross_capped(
@@ -637,7 +639,7 @@ def generate_cross_capped(
     """Generate with cross-axis capping: detect on one axis, correct on another.
 
     Returns:
-        (sequences, scores, projs, n_triggered, n_corrected)
+        (sequences, scores, projs, n_triggered, n_corrected, corrected_layers)
     """
     hooks = [
         _CrossAxisCappingHook(
@@ -675,4 +677,5 @@ def generate_cross_capped(
 
     n_triggered = sum(h.n_triggered for h in hooks)
     n_corrected = sum(h.n_corrected for h in hooks)
-    return output.sequences, output.scores, projs, n_triggered, n_corrected
+    corrected_layers = [li for li, h in zip(cap_layers, hooks) if h.n_corrected > 0]
+    return output.sequences, output.scores, projs, n_triggered, n_corrected, corrected_layers
