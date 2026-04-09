@@ -358,10 +358,10 @@ def run_experiment(
             "baseline_text": bl_text,
             "assistant_cap_applied": "Yes" if n_cap > 0 else "No",
             "assistant_cap_layers": ",".join(f"L{li}" for li in cap_active) if cap_active else "",
-            "assistant_cap_text": cap_text,
+            "assistant_cap_text": cap_text if n_cap > 0 else "NA",
             "cross_cap_applied": "Yes" if n_corrected > 0 else "No",
             "cross_cap_layers": ",".join(f"L{li}" for li in cross_active) if cross_active else "",
-            "cross_cap_text": cross_text,
+            "cross_cap_text": cross_text if n_corrected > 0 else "NA",
         })
 
         del bl_ids, bl_scores, bl_projs, cap_ids, cross_ids
