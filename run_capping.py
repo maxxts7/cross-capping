@@ -13,7 +13,7 @@ Presets
   cross_full    100 prompts — complete run
 
 Run with:
-    python run_capping.py [--preset cross_sanity|cross_axis|cross_full] [--gpu N]
+    python run_capping.py [--preset cross_sanity|cross_axis|cross_full]
 """
 
 import argparse
@@ -24,55 +24,65 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import torch
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%H:%M:%S",
 )
+logger = logging.getLogger("capping")
 
 # ============================================================
 # PRESETS
 # ============================================================
 
+_SHARED_PRESET = dict(
+    CROSS_CORRECT_AXIS="jbb_wj_pca_raw",
+    CROSS_CORRECT_THRESHOLDS=["std_jailbreak"],
+)
+
 PRESETS = {
-    "cross_axis": dict(
-        VERSION="cross_axis",
-        VERSION_NOTES="Cross-axis capping: detect with assistant axis (optimal threshold), "
-                      "correct with jbb_wj_pca_raw axis at std_jailbreak threshold.",
-        N_PROMPTS=20,
-        MAX_NEW_TOKENS=128,
-        OUTPUT_DIR="results/capping_cross_axis",
-        N_CALIBRATION=20,
-        N_COMPLIANCE=20,
-        CROSS_CORRECT_AXIS="jbb_wj_pca_raw",
-        CROSS_CORRECT_THRESHOLDS=["std_jailbreak"],
-    ),
-    "cross_sanity": dict(
-        VERSION="cross_sanity",
-        VERSION_NOTES="Cross-axis sanity check — 5 prompts. Detect with assistant axis "
-                      "(optimal threshold), correct with jbb_wj_pca_raw at std_jailbreak.",
-        N_PROMPTS=5,
-        MAX_NEW_TOKENS=64,
-        OUTPUT_DIR="results/capping_cross_sanity",
-        N_CALIBRATION=10,
-        N_COMPLIANCE=10,
-        CROSS_CORRECT_AXIS="jbb_wj_pca_raw",
-        CROSS_CORRECT_THRESHOLDS=["std_jailbreak"],
-    ),
-    "cross_full": dict(
-        VERSION="cross_full",
-        VERSION_NOTES="Cross-axis full run — 100 jailbreak prompts. "
-                      "Detect with assistant axis (optimal threshold), correct with "
-                      "jbb_wj_pca_raw at std_jailbreak threshold.",
-        N_PROMPTS=100,
-        MAX_NEW_TOKENS=256,
-        OUTPUT_DIR="results/capping_cross_full",
-        N_CALIBRATION=30,
-        N_COMPLIANCE=50,
-        CROSS_CORRECT_AXIS="jbb_wj_pca_raw",
-        CROSS_CORRECT_THRESHOLDS=["std_jailbreak"],
-    ),
+    "cross_axis": {
+        **_SHARED_PRESET,
+        "VERSION": "cross_axis",
+        "VERSION_NOTES": (
+            "Cross-axis capping: detect with assistant axis (optimal threshold), "
+            "correct with jbb_wj_pca_raw axis at std_jailbreak threshold."
+        ),
+        "N_PROMPTS": 20,
+        "MAX_NEW_TOKENS": 128,
+        "OUTPUT_DIR": "results/capping_cross_axis",
+        "N_CALIBRATION": 20,
+        "N_COMPLIANCE": 20,
+    },
+    "cross_sanity": {
+        **_SHARED_PRESET,
+        "VERSION": "cross_sanity",
+        "VERSION_NOTES": (
+            "Cross-axis sanity check — 5 prompts. Detect with assistant axis "
+            "(optimal threshold), correct with jbb_wj_pca_raw at std_jailbreak."
+        ),
+        "N_PROMPTS": 5,
+        "MAX_NEW_TOKENS": 64,
+        "OUTPUT_DIR": "results/capping_cross_sanity",
+        "N_CALIBRATION": 10,
+        "N_COMPLIANCE": 10,
+    },
+    "cross_full": {
+        **_SHARED_PRESET,
+        "VERSION": "cross_full",
+        "VERSION_NOTES": (
+            "Cross-axis full run — 100 jailbreak prompts. "
+            "Detect with assistant axis (optimal threshold), correct with "
+            "jbb_wj_pca_raw at std_jailbreak threshold."
+        ),
+        "N_PROMPTS": 100,
+        "MAX_NEW_TOKENS": 256,
+        "OUTPUT_DIR": "results/capping_cross_full",
+        "N_CALIBRATION": 30,
+        "N_COMPLIANCE": 50,
+    },
 }
 
 # ============================================================
@@ -144,7 +154,6 @@ def load_jbb_behaviors(n_prompts=None):
     Returns list of goal strings.
     """
     from datasets import load_dataset
-    logger = logging.getLogger("capping")
     logger.info("Loading JailbreakBench/JBB-Behaviors...")
     ds = load_dataset("JailbreakBench/JBB-Behaviors", "behaviors")
     split = list(ds.keys())[0]
@@ -164,7 +173,6 @@ def load_wildjailbreak_train(n_prompts=None):
     Returns list of adversarial prompt strings.
     """
     from datasets import load_dataset
-    logger = logging.getLogger("capping")
     logger.info("Loading allenai/wildjailbreak (train, adversarial_harmful)...")
     ds = load_dataset(
         "allenai/wildjailbreak", "train",
@@ -174,11 +182,11 @@ def load_wildjailbreak_train(n_prompts=None):
     split = "train" if "train" in ds else list(ds.keys())[0]
     ds = ds[split]
 
-    prompts = []
-    for row in ds:
-        if row.get("data_type") != "adversarial_harmful":
-            continue
-        prompts.append(row["adversarial"])
+    prompts = [
+        row["adversarial"]
+        for row in ds
+        if row.get("data_type") == "adversarial_harmful"
+    ]
 
     if n_prompts is not None:
         prompts = prompts[:n_prompts]
@@ -203,7 +211,6 @@ def load_jailbreak_dataset(n_prompts=None):
     Requires: pip install datasets
     """
     from datasets import load_dataset
-    logger = logging.getLogger("capping")
     logger.info("Loading allenai/wildjailbreak (eval, adversarial_harmful)...")
 
     # delimiter and keep_default_na are required for this dataset
@@ -240,66 +247,52 @@ def load_jailbreak_dataset(n_prompts=None):
 
 
 # ============================================================
-# MAIN
+# HELPERS
 # ============================================================
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Run jailbreak capping experiment",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "--preset", choices=list(PRESETS.keys()), default="cross_full",
-        help="Configuration preset (default: cross_full)",
-    )
-    parser.add_argument(
-        "--gpu", type=int, default=None,
-        help="Restrict to a single GPU index (sets CUDA_VISIBLE_DEVICES)",
-    )
-    parser.add_argument(
-        "--output-dir", type=str, default=None,
-        help="Override the preset's output directory",
-    )
-    parser.add_argument(
-        "--prompt-slice", type=str, default=None, metavar="START:END",
-        help="Run only a slice of behaviors, e.g. '0:50' for the first half",
-    )
-    parser.add_argument(
-        "--capeval-slice", type=str, default=None, metavar="START:END",
-        help="Run only a slice of capability-eval prompts (for parallel runs)",
-    )
-    args = parser.parse_args()
+def build_version_doc(cfg, exp, cap_layers, thresholds, axis_directions,
+                      prompts, calibration_prompts, jailbreak_train_prompts):
+    """Build the version metadata dict saved as version.json."""
+    return {
+        "version":           cfg["VERSION"],
+        "preset":            cfg["VERSION"],
+        "notes":             cfg["VERSION_NOTES"],
+        "timestamp":         datetime.now().isoformat(),
+        "model_name":        MODEL_NAME,
+        "cap_layers":        f"L{cap_layers[0]}-L{cap_layers[-1]}",
+        "threshold_method":  "discriminative_midpoint",
+        "axis_names":        list(axis_directions.keys()),
+        "thresholds": {
+            axis: {
+                f"L{layer_idx}": layer_data
+                for layer_idx, layer_data in layer_taus.items()
+            }
+            for axis, layer_taus in thresholds.items()
+        },
+        "n_prompts":         len(prompts),
+        "dataset":           "allenai/wildjailbreak (eval, adversarial_harmful)",
+        "n_calibration":     len(calibration_prompts),
+        "n_jailbreak_train": len(jailbreak_train_prompts),
+        "max_new_tokens":    cfg["MAX_NEW_TOKENS"],
+        "temperature":       TEMPERATURE,
+        "do_sample":         DO_SAMPLE,
+        "seed":              SEED,
+        "deterministic":     DETERMINISTIC,
+        "num_layers":        exp.num_layers,
+        "hidden_dim":        exp.hidden_dim,
+    }
 
-    if args.gpu is not None:
-        import os
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
-        print(f"Pinned to GPU {args.gpu} (CUDA_VISIBLE_DEVICES={args.gpu})")
 
-    cfg = PRESETS[args.preset]
-    print(f"Preset: {args.preset}")
+def compute_axes(exp, cfg, cap_layers):
+    """Compute assistant and compliance axes; return axis dicts and raw vectors.
 
-    t_start = time.time()
+    Returns:
+        axis_directions      -- {"assistant_capping": vec} for main experiment
+        all_axis_directions  -- includes the compliance axis for cross-axis work
+        assistant_axis       -- the raw assistant direction vector
+    """
+    from capping_experiment import compute_directions, compute_pca_compliance_axis
 
-    from capping_experiment import (
-        SteeringExperiment, compute_directions,
-        compute_discriminative_thresholds, validate_thresholds,
-        run_capping_experiment, compute_pca_compliance_axis,
-        run_capability_eval, regex_refusal_detector,
-        generate_cross_capped, _generate_baseline_multi_axis,
-    )
-
-    output_dir = Path(args.output_dir or cfg["OUTPUT_DIR"])
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # --- Load model ---
-    print(f"\nLoading model: {MODEL_NAME}")
-    exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH, deterministic=DETERMINISTIC)
-    print(f"  Layers: {exp.num_layers}, Hidden dim: {exp.hidden_dim}")
-
-    cap_layers = CAP_LAYERS
-    print(f"  Cap layers: L{cap_layers[0]}–L{cap_layers[-1]} ({len(cap_layers)} layers)")
-
-    # --- Compute assistant axis ---
     print("\nComputing assistant axis...")
     all_directions = compute_directions(
         exp,
@@ -310,13 +303,9 @@ def main():
         enable_pca=False,
     )
     assistant_axis = all_directions["assistant_toward"]
-    axis_directions = {"assistant_capping": assistant_axis}
 
-    # --- Compliance axis (jbb_wj_pca_raw) ---
-    # PCA on pooled refusing (JBB-Behaviors) + compliant (WildJailbreak train)
-    # activations. Used as the correction axis in cross-axis capping.
-    n_compliance = cfg["N_COMPLIANCE"]
     correct_axis_name = cfg["CROSS_CORRECT_AXIS"]
+    n_compliance = cfg["N_COMPLIANCE"]
     print(f"\nBuilding compliance axis ({n_compliance} prompts per side)...")
 
     refusing_prompts = load_jbb_behaviors(n_prompts=n_compliance)
@@ -326,25 +315,34 @@ def main():
         exp, refusing_prompts, compliant_prompts, cap_layers,
         assistant_axis=None, axis_name=correct_axis_name,
     )
-    if correct_axis_vec is not None:
-        axis_directions[correct_axis_name] = correct_axis_vec
-        cos_val = (correct_axis_vec @ assistant_axis).item()
-        print(f"  cos(assistant) — {correct_axis_name}: {cos_val:.4f}")
 
-    # all_axis_directions: both detect + correct (for threshold computation)
-    # axis_directions (main experiment): only assistant_capping
-    all_axis_directions = {"assistant_capping": assistant_axis, correct_axis_name: correct_axis_vec}
+    all_axis_directions = {"assistant_capping": assistant_axis}
+    if correct_axis_vec is not None:
+        all_axis_directions[correct_axis_name] = correct_axis_vec
+        cos_val = (correct_axis_vec @ assistant_axis).item()
+        print(f"  cos(assistant) -- {correct_axis_name}: {cos_val:.4f}")
+
     axis_directions = {"assistant_capping": assistant_axis}
 
     print(f"  Axis directions (main): {list(axis_directions.keys())}")
     print(f"  Axis directions (cross): {list(all_axis_directions.keys())}")
 
-    # --- Compute discriminative thresholds ---
-    # τ = midpoint between mean(benign) and mean(jailbreak) at each cap layer.
-    # Uses WildJailbreak train split for the jailbreak side (no eval contamination).
-    # Compute for ALL axes (including correction axis) — full threshold dict is
-    # needed by the cross-axis section for mean_benign/std_jailbreak lookups.
-    calibration_prompts = CALIBRATION_PROMPTS[:cfg["N_CALIBRATION"]]
+    return axis_directions, all_axis_directions, assistant_axis
+
+
+def compute_thresholds(exp, cfg, cap_layers, axis_directions, all_axis_directions,
+                       calibration_prompts):
+    """Compute discriminative thresholds for all axes.
+
+    Returns:
+        thresholds             -- filtered to assistant_capping / optimal only
+        all_thresholds         -- full thresholds for every axis
+        jailbreak_train_prompts -- the jailbreak prompts used for calibration
+    """
+    from capping_experiment import (
+        compute_discriminative_thresholds, validate_thresholds,
+    )
+
     jailbreak_train_prompts = load_wildjailbreak_train(n_prompts=cfg["N_COMPLIANCE"])
 
     print(f"\nComputing discriminative thresholds "
@@ -357,7 +355,7 @@ def main():
         cap_layers=cap_layers,
     )
 
-    # For the main experiment: filter to assistant_capping with "optimal" threshold only
+    # For the main experiment: filter to assistant_capping with "optimal" only
     thresholds = {
         axis: {
             layer_idx: {"optimal": layer_data["optimal"]}
@@ -368,128 +366,44 @@ def main():
 
     validate_thresholds(thresholds, axis_directions, cap_layers)
 
-    # --- Load jailbreak dataset ---
+    return thresholds, all_thresholds, jailbreak_train_prompts
+
+
+def load_prompts(cfg):
+    """Load jailbreak + calibration prompts.
+
+    Returns:
+        prompts, prompt_categories, calibration_prompts
+    """
     print("\nLoading jailbreak dataset...")
     behaviors = load_jailbreak_dataset(n_prompts=cfg["N_PROMPTS"])
     prompts           = [b["goal"]     for b in behaviors]
     prompt_categories = [b["category"] for b in behaviors]
-    vanilla_goals     = [b.get("vanilla", "") for b in behaviors]
     print(f"  {len(prompts)} behaviors loaded")
 
-    # Apply prompt slice (for data-parallel runs across multiple GPUs)
-    prompt_start = 0
-    if args.prompt_slice:
-        parts = args.prompt_slice.split(":")
-        start = int(parts[0]) if parts[0] else 0
-        end   = int(parts[1]) if len(parts) > 1 and parts[1] else len(prompts)
-        prompt_start = start
-        prompts           = prompts[start:end]
-        prompt_categories = prompt_categories[start:end]
-        vanilla_goals     = vanilla_goals[start:end]
-        print(f"  Prompt slice [{start}:{end}]: {len(prompts)} behaviors")
+    calibration_prompts = CALIBRATION_PROMPTS[:cfg["N_CALIBRATION"]]
 
-    # Apply capeval slice (parallelize capability eval across GPUs).
-    # Only affects the eval loop; threshold computation still uses the full set.
-    capeval_start = 0
-    capeval_prompts = calibration_prompts
-    if args.capeval_slice:
-        parts = args.capeval_slice.split(":")
-        start = int(parts[0]) if parts[0] else 0
-        end   = int(parts[1]) if len(parts) > 1 and parts[1] else len(calibration_prompts)
-        capeval_start = start
-        capeval_prompts = calibration_prompts[start:end]
-        print(f"  Capeval slice [{start}:{end}]: {len(capeval_prompts)} calibration prompts")
+    return prompts, prompt_categories, calibration_prompts
 
-    # --- Version document ---
-    version = cfg["VERSION"]
-    version_doc = {
-        "version":          version,
-        "preset":           args.preset,
-        "notes":            cfg["VERSION_NOTES"],
-        "timestamp":        datetime.now().isoformat(),
-        "model_name":       MODEL_NAME,
-        "cap_layers":       f"L{cap_layers[0]}-L{cap_layers[-1]}",
-        "threshold_method": "discriminative_midpoint",
-        "axis_names":       list(axis_directions.keys()),
-        "thresholds": {
-            axis: {
-                f"L{layer_idx}": layer_data
-                for layer_idx, layer_data in layer_taus.items()
-            }
-            for axis, layer_taus in thresholds.items()
-        },
-        "n_prompts":        len(prompts),
-        "dataset":          "allenai/wildjailbreak (eval, adversarial_harmful)",
-        "n_calibration":    len(calibration_prompts),
-        "n_jailbreak_train": len(jailbreak_train_prompts),
-        "max_new_tokens":   cfg["MAX_NEW_TOKENS"],
-        "temperature":      TEMPERATURE,
-        "do_sample":        DO_SAMPLE,
-        "seed":             SEED,
-        "deterministic":    DETERMINISTIC,
-        "num_layers":       exp.num_layers,
-        "hidden_dim":       exp.hidden_dim,
-    }
-    with open(output_dir / "version.json", "w") as f:
-        json.dump(version_doc, f, indent=2)
-    print(f"\nVersion: {version}")
 
-    # --- Run experiment ---
-    print("Running capping experiment...")
-    gen_df = run_capping_experiment(
-        exp=exp,
-        prompts=prompts,
-        cap_layers=cap_layers,
-        thresholds=thresholds,
-        axis_directions=axis_directions,
-        max_new_tokens=cfg["MAX_NEW_TOKENS"],
-        seed=SEED,
-        temperature=TEMPERATURE,
-        do_sample=DO_SAMPLE,
-        version=version,
-        prompt_categories=prompt_categories,
-        prompt_idx_offset=prompt_start,
-    )
+def run_cross_axis_experiment(exp, cfg, cap_layers, all_axis_directions,
+                              all_thresholds, prompts, capeval_prompts):
+    """Run the cross-axis capping experiment on jailbreak and benign prompts.
 
-    # --- Capability evaluation ---
-    print(f"\nRunning capability evaluation on {len(capeval_prompts)} calibration prompts...")
-    cap_eval_df = run_capability_eval(
-        exp=exp,
-        capability_prompts=capeval_prompts,
-        cap_layers=cap_layers,
-        thresholds=thresholds,
-        axis_directions=axis_directions,
-        max_new_tokens=cfg["MAX_NEW_TOKENS"],
-        temperature=TEMPERATURE,
-        do_sample=DO_SAMPLE,
-        version=version,
-        refusal_fn=regex_refusal_detector,
-        prompt_idx_offset=capeval_start,
-    )
+    Detect with assistant axis, correct with compliance axis. Generates
+    baseline + cross-capped outputs for each prompt.
 
-    # Print summary
-    print("\n  Capability eval summary (benign prompts):")
-    summary = cap_eval_df.groupby("correction_applied").agg(
-        count=("prompt_idx", "count"),
-    )
-    print(summary.to_string())
+    Returns (cross_gen_df, cross_cap_eval_df).
+    """
+    from capping_experiment import generate_cross_capped, _generate_baseline_multi_axis
 
-    # --- Save outputs ---
-    gen_df.to_csv(output_dir / "assistant_axis_generations.csv", index=False)
-    cap_eval_df.to_csv(output_dir / "assistant_axis_capability_eval.csv", index=False)
+    correct_axis_name = cfg["CROSS_CORRECT_AXIS"]
 
-    # ============================================================
-    # CROSS-AXIS EXPERIMENT
-    # ============================================================
-    # Detect with assistant axis (high selectivity), correct with
-    # a compliance axis (high refusal power). Runs on both jailbreak
-    # and benign prompts for direct comparison with simple capping.
-
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Running cross-axis experiment:")
     print(f"  Detect:  assistant_capping (selectivity ~13x)")
     print(f"  Correct: {correct_axis_name}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     detect_axis = all_axis_directions["assistant_capping"]
     correct_axis = all_axis_directions[correct_axis_name]
@@ -505,17 +419,15 @@ def main():
     cross_gen_rows = []
     cross_cap_eval_rows = []
 
-    # --- Jailbreak prompts then benign prompts ---
-    all_prompts = [
-        ("jailbreak", prompts, prompt_categories, prompt_start),
-        ("benign", capeval_prompts, None, capeval_start),
+    prompt_sets = [
+        ("jailbreak", prompts, cross_gen_rows),
+        ("benign", capeval_prompts, cross_cap_eval_rows),
     ]
 
-    for prompt_set_name, prompt_list, categories, idx_offset in all_prompts:
-        print(f"\n  Cross-axis on {prompt_set_name} prompts ({len(prompt_list)})...")
+    for set_name, prompt_list, target_rows in prompt_sets:
+        print(f"\n  Cross-axis on {set_name} prompts ({len(prompt_list)})...")
 
-        for local_idx, prompt_text in enumerate(prompt_list):
-            prompt_idx = local_idx + idx_offset
+        for prompt_idx, prompt_text in enumerate(prompt_list):
             input_ids = exp.tokenize(prompt_text)
             prompt_len = input_ids.shape[1]
 
@@ -528,19 +440,17 @@ def main():
                     bl_ids[0, prompt_len:], skip_special_tokens=True
                 )
             except Exception:
-                logging.getLogger("capping").exception(
-                    "  FAILED baseline for %s prompt %d", prompt_set_name, prompt_idx
+                logger.exception(
+                    "  FAILED baseline for %s prompt %d", set_name, prompt_idx
                 )
                 continue
 
             for correct_key in correct_keys:
                 detect_per_layer = {
-                    li: detect_thresholds[li][detect_key]
-                    for li in cap_layers
+                    li: detect_thresholds[li][detect_key] for li in cap_layers
                 }
                 correct_per_layer = {
-                    li: correct_thresholds[li][correct_key]
-                    for li in cap_layers
+                    li: correct_thresholds[li][correct_key] for li in cap_layers
                 }
 
                 try:
@@ -553,9 +463,9 @@ def main():
                             cfg["MAX_NEW_TOKENS"], TEMPERATURE, DO_SAMPLE,
                         )
                 except Exception:
-                    logging.getLogger("capping").exception(
+                    logger.exception(
                         "  FAILED cross-axis %s prompt %d alpha=%s",
-                        prompt_set_name, prompt_idx, correct_key,
+                        set_name, prompt_idx, correct_key,
                     )
                     continue
 
@@ -564,26 +474,122 @@ def main():
                 )
 
                 corrected = n_corrected > 0
-                row = {
+                target_rows.append({
                     "prompt_idx": prompt_idx,
                     "prompt_text": prompt_text,
                     "baseline_text": bl_text,
                     "correction_applied": "Yes" if corrected else "No",
                     "perturbed_text": pt_text if corrected else "NA",
-                }
-                if prompt_set_name == "jailbreak":
-                    cross_gen_rows.append(row)
-                else:
-                    cross_cap_eval_rows.append(row)
+                })
 
                 del pt_ids, pt_scores, pt_projs
 
             del bl_ids, bl_scores, bl_projs
-            import torch as _torch
-            _torch.cuda.empty_cache()
+            torch.cuda.empty_cache()
 
     cross_gen_df = pd.DataFrame(cross_gen_rows)
     cross_cap_eval_df = pd.DataFrame(cross_cap_eval_rows)
+    return cross_gen_df, cross_cap_eval_df
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+    args = parse_args()
+
+    cfg = PRESETS[args.preset]
+    print(f"Preset: {args.preset}")
+
+    t_start = time.time()
+
+    from capping_experiment import (
+        SteeringExperiment, run_capping_experiment,
+        run_capability_eval, regex_refusal_detector,
+    )
+
+    output_dir = Path(args.output_dir or cfg["OUTPUT_DIR"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # --- Load model ---
+    print(f"\nLoading model: {MODEL_NAME}")
+    exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH, deterministic=DETERMINISTIC)
+    print(f"  Layers: {exp.num_layers}, Hidden dim: {exp.hidden_dim}")
+
+    cap_layers = CAP_LAYERS
+    print(f"  Cap layers: L{cap_layers[0]}--L{cap_layers[-1]} ({len(cap_layers)} layers)")
+
+    # --- Compute axes ---
+    axis_directions, all_axis_directions, assistant_axis = compute_axes(
+        exp, cfg, cap_layers,
+    )
+
+    # --- Load prompts ---
+    prompts, prompt_categories, calibration_prompts = load_prompts(cfg)
+
+    # --- Compute thresholds ---
+    thresholds, all_thresholds, jailbreak_train_prompts = compute_thresholds(
+        exp, cfg, cap_layers, axis_directions, all_axis_directions,
+        calibration_prompts,
+    )
+
+    # --- Save version metadata ---
+    version = cfg["VERSION"]
+    version_doc = build_version_doc(
+        cfg, exp, cap_layers, thresholds, axis_directions,
+        prompts, calibration_prompts, jailbreak_train_prompts,
+    )
+    with open(output_dir / "version.json", "w") as f:
+        json.dump(version_doc, f, indent=2)
+    print(f"\nVersion: {version}")
+
+    # --- Run main capping experiment ---
+    print("Running capping experiment...")
+    gen_df = run_capping_experiment(
+        exp=exp,
+        prompts=prompts,
+        cap_layers=cap_layers,
+        thresholds=thresholds,
+        axis_directions=axis_directions,
+        max_new_tokens=cfg["MAX_NEW_TOKENS"],
+        seed=SEED,
+        temperature=TEMPERATURE,
+        do_sample=DO_SAMPLE,
+        version=version,
+        prompt_categories=prompt_categories,
+    )
+
+    # --- Capability evaluation ---
+    print(f"\nRunning capability evaluation on {len(calibration_prompts)} calibration prompts...")
+    cap_eval_df = run_capability_eval(
+        exp=exp,
+        capability_prompts=calibration_prompts,
+        cap_layers=cap_layers,
+        thresholds=thresholds,
+        axis_directions=axis_directions,
+        max_new_tokens=cfg["MAX_NEW_TOKENS"],
+        temperature=TEMPERATURE,
+        do_sample=DO_SAMPLE,
+        version=version,
+        refusal_fn=regex_refusal_detector,
+    )
+
+    print("\n  Capability eval summary (benign prompts):")
+    summary = cap_eval_df.groupby("correction_applied").agg(
+        count=("prompt_idx", "count"),
+    )
+    print(summary.to_string())
+
+    # --- Save main experiment outputs ---
+    gen_df.to_csv(output_dir / "assistant_axis_generations.csv", index=False)
+    cap_eval_df.to_csv(output_dir / "assistant_axis_capability_eval.csv", index=False)
+
+    # --- Cross-axis experiment ---
+    cross_gen_df, cross_cap_eval_df = run_cross_axis_experiment(
+        exp, cfg, cap_layers, all_axis_directions, all_thresholds,
+        prompts, calibration_prompts,
+    )
 
     cross_gen_df.to_csv(output_dir / "cross_axis_generations.csv", index=False)
     cross_cap_eval_df.to_csv(output_dir / "cross_axis_capability_eval.csv", index=False)
@@ -599,6 +605,7 @@ def main():
         )
         print(summary.to_string())
 
+    # --- Final summary ---
     elapsed = time.time() - t_start
     print(f"\nDone in {elapsed / 60:.1f} minutes.")
     print(f"Saved to {output_dir}/")
@@ -607,6 +614,23 @@ def main():
     print(f"  assistant_axis_capability_eval.csv   {len(cap_eval_df)} rows")
     print(f"  cross_axis_generations.csv           {len(cross_gen_df)} rows")
     print(f"  cross_axis_capability_eval.csv       {len(cross_cap_eval_df)} rows")
+
+
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Run jailbreak capping experiment",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--preset", choices=list(PRESETS.keys()), default="cross_full",
+        help="Configuration preset (default: cross_full)",
+    )
+    parser.add_argument(
+        "--output-dir", type=str, default=None,
+        help="Override the preset's output directory",
+    )
+    return parser.parse_args()
 
 
 if __name__ == "__main__":

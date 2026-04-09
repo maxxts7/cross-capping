@@ -892,7 +892,6 @@ def run_capping_experiment(
     do_sample: bool = False,
     version: str = "",
     prompt_categories: Optional[list[str]] = None,
-    prompt_idx_offset: int = 0,
 ) -> pd.DataFrame:
     """Run the full capping comparison experiment.
 
@@ -927,15 +926,14 @@ def run_capping_experiment(
     exp_t0 = time.time()
     completed = 0
 
-    for local_idx, prompt in enumerate(tqdm(prompts, desc="Prompts")):
-        prompt_idx = local_idx + prompt_idx_offset
+    for prompt_idx, prompt in enumerate(tqdm(prompts, desc="Prompts")):
         prompt_t0 = time.time()
         input_ids = exp.tokenize(prompt)
         prompt_len = input_ids.shape[1]
-        category = prompt_categories[local_idx] if prompt_categories else None
+        category = prompt_categories[prompt_idx] if prompt_categories else None
         logger.info(
             "Prompt %d/%d [%s]: %r (%d tokens)",
-            local_idx + 1, len(prompts), category or "?", prompt[:60], prompt_len,
+            prompt_idx + 1, len(prompts), category or "?", prompt[:60], prompt_len,
         )
 
         # --- Baseline: one pass, tracking all axes simultaneously ---
@@ -1019,7 +1017,7 @@ def run_capping_experiment(
         eta = (total - completed) / rate if rate > 0 else 0
         logger.info(
             "  Prompt %d done: %.1fs  (%d/%d conditions, ETA %.0fm%.0fs)",
-            local_idx + 1, prompt_dt, completed, total,
+            prompt_idx + 1, prompt_dt, completed, total,
             eta // 60, eta % 60,
         )
 
@@ -1106,7 +1104,6 @@ def run_capability_eval(
     do_sample: bool = False,
     version: str = "",
     refusal_fn=None,
-    prompt_idx_offset: int = 0,
 ) -> pd.DataFrame:
     """Evaluate capability degradation by running capped model on benign prompts.
 
@@ -1137,8 +1134,7 @@ def run_capability_eval(
         len(capability_prompts), n_conditions, len(capability_prompts) * n_conditions,
     )
 
-    for local_idx, prompt in enumerate(tqdm(capability_prompts, desc="CapabilityEval")):
-        prompt_idx = local_idx + prompt_idx_offset
+    for prompt_idx, prompt in enumerate(tqdm(capability_prompts, desc="CapabilityEval")):
         input_ids = exp.tokenize(prompt)
         prompt_len = input_ids.shape[1]
 
