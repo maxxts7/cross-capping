@@ -2,6 +2,10 @@
 
 An exploratory study on separating jailbreak detection from correction in LLM activation space.
 
+This project was done as part of the BlueDot AI Safety project sprint. Compute costs were covered by Rapid Grants.
+
+I have tried to explain everything in detail throughout this document and the codebase. If you find any information missing or the structure hard to follow, please reach out to me at manuxtmail@gmail.com.
+
 ## What is this?
 
 When a large language model (LLM) generates text, its internal "hidden states" carry directional signals that indicate whether it's about to comply with or refuse a request. Safety researchers have found that you can nudge a model toward refusal by **capping** these signals along a known direction (the "assistant axis").
