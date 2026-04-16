@@ -1023,10 +1023,10 @@ def orthogonalize_compliance_axes(
     for li in cap_layers:
         benign_stack = torch.stack(benign_acts[li])
 
-        # Compute benign direction via PCA (PC1)
-        centered = benign_stack - benign_stack.mean(dim=0)
-        _, S, Vt = torch.linalg.svd(centered, full_matrices=False)
-        benign_dir = Vt[0].float()
+        # Compute benign direction as the mean activation (normalized).
+        # This captures what benign prompts have in common, not how they
+        # differ from each other (which is what PCA PC1 would give).
+        benign_dir = benign_stack.mean(dim=0).float()
         benign_dir = benign_dir / benign_dir.norm()
 
         # Orthogonalize: remove benign component from compliance axis
