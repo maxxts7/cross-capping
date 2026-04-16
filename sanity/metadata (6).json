@@ -1,0 +1,14 @@
+{
+  "preset": "sanity",
+  "model": "Qwen/Qwen3-32B",
+  "cap_layers": "L46-L53",
+  "n_jailbreak": 10,
+  "n_benign": 10,
+  "max_new_tokens": 64,
+  "timestamp": "2026-04-16T19:51:40.980446",
+  "cos_similarity": 0.16422635316848755,
+  "assistant_threshold_method": "optimal (discriminative midpoint)",
+  "compliance_threshold_method": "mean+std",
+  "axis_method": "pca",
+  "cross_only": false
+}

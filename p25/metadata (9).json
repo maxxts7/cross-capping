@@ -1,14 +1,14 @@
 {
-  "preset": "full",
+  "preset": "sanity",
   "model": "Qwen/Qwen3-32B",
   "cap_layers": "L46-L53",
-  "n_jailbreak": 100,
-  "n_benign": 50,
+  "n_jailbreak": 10,
+  "n_benign": 10,
   "max_new_tokens": 256,
-  "timestamp": "2026-04-09T13:17:49.638534",
-  "cos_similarity": 0.1562730073928833,
+  "timestamp": "2026-04-16T21:47:08.636394",
+  "cos_similarity": 0.16422635316848755,
   "assistant_threshold_method": "optimal (discriminative midpoint)",
-  "compliance_threshold_method": "std_jailbreak",
+  "compliance_threshold_method": "p25",
   "axis_method": "pca",
   "cross_only": false
 }

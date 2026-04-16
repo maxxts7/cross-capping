@@ -229,13 +229,13 @@ def load_original_capping(
             continue
         vec_data = config["vectors"][intervention["vector"]]
         layer_idx = vec_data["layer"]
-        # Negate: config stores vectors pointing toward role-playing,
-        # we need them pointing toward assistant (raw direction)
-        axis = -vec_data["vector"].float()
+        # REVERSED: Use original vector direction (toward assistant)
+        # Previous negation was causing axis to point toward role-playing
+        axis = vec_data["vector"].float()
         axis = axis / axis.norm()
-        # Negate threshold: config uses negative values on the negated axis,
-        # equivalent to positive values on the raw axis
-        threshold = -float(intervention["cap"])
+        # REVERSED: Use original threshold sign
+        # Keep threshold as-is since axis direction is no longer negated
+        threshold = float(intervention["cap"])
 
         per_layer_axes[layer_idx] = axis
         per_layer_thresholds[layer_idx] = threshold
