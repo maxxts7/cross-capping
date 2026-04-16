@@ -1,0 +1,21 @@
+# Environment variables and API keys
+.env
+
+# Claude Code settings
+.claude/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# IDE settings
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
