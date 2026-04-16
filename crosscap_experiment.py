@@ -963,26 +963,25 @@ def compute_mean_diff_compliance_axis(
             axis_name, li, mean_r, std_r, mean_c, std_c, mean_r - mean_c,
         )
 
-    return per_layer_axes, per_layer_stats
+    return per_layer_axes, per_layer_stats, refusing_acts, compliant_acts
 
 
 def orthogonalize_compliance_axes(
     exp: SteeringExperiment,
     compliance_axes: dict[int, torch.Tensor],
     benign_prompts: list[str],
-    refusing_prompts: list[str],
-    compliant_prompts: list[str],
+    refusing_acts: dict[int, list[torch.Tensor]],
+    compliant_acts: dict[int, list[torch.Tensor]],
     cap_layers: list[int],
 ) -> tuple[dict[int, torch.Tensor], dict[int, dict[str, float]]]:
     """Remove the benign component from compliance axes.
 
-    Computes a "benign direction" at each cap layer (PC1 of benign
-    activations), then projects it out of the compliance axis. The
-    resulting vector can still push toward refusal but has zero
+    Projects out the mean benign activation direction from each compliance
+    axis. The resulting vector can still push toward refusal but has zero
     projection onto the direction that benign prompts naturally occupy.
 
-    Also recomputes threshold stats by projecting the refusing/compliant
-    activations onto the orthogonalized axes.
+    Reuses the refusing/compliant activations already collected during
+    axis construction to recompute threshold stats on the new axes.
 
     Returns:
         orth_axes:       dict mapping layer_idx -> orthogonalized unit vector
@@ -990,42 +989,25 @@ def orthogonalize_compliance_axes(
     """
     logger.info(
         "Orthogonalizing compliance axes against benign direction "
-        "(%d benign, %d refusing, %d compliant, L%d-L%d)...",
-        len(benign_prompts), len(refusing_prompts), len(compliant_prompts),
-        cap_layers[0], cap_layers[-1],
+        "(%d benign prompts, L%d-L%d)...",
+        len(benign_prompts), cap_layers[0], cap_layers[-1],
     )
 
-    # Collect activations at each cap layer for all three prompt sets
+    # Only need to collect benign activations — refusing/compliant are reused
     benign_acts = {li: [] for li in cap_layers}
-    refusing_acts = {li: [] for li in cap_layers}
-    compliant_acts = {li: [] for li in cap_layers}
-
     for prompt in tqdm(benign_prompts, desc="  Benign activations", leave=False):
         ids = exp.tokenize(prompt)
         acts, _ = exp.get_baseline_trajectory(ids)
         for li in cap_layers:
             benign_acts[li].append(acts[li].float())
 
-    for prompt in tqdm(refusing_prompts, desc="  Refusing activations", leave=False):
-        ids = exp.tokenize(prompt)
-        acts, _ = exp.get_baseline_trajectory(ids)
-        for li in cap_layers:
-            refusing_acts[li].append(acts[li].float())
-
-    for prompt in tqdm(compliant_prompts, desc="  Compliant activations", leave=False):
-        ids = exp.tokenize(prompt)
-        acts, _ = exp.get_baseline_trajectory(ids)
-        for li in cap_layers:
-            compliant_acts[li].append(acts[li].float())
-
     orth_axes = {}
     orth_stats = {}
     for li in cap_layers:
         benign_stack = torch.stack(benign_acts[li])
 
-        # Compute benign direction as the mean activation (normalized).
-        # This captures what benign prompts have in common, not how they
-        # differ from each other (which is what PCA PC1 would give).
+        # Benign direction = mean benign activation (normalized).
+        # This is the direction we want to protect from capping.
         benign_dir = benign_stack.mean(dim=0).float()
         benign_dir = benign_dir / benign_dir.norm()
 

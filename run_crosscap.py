@@ -699,11 +699,11 @@ def do_warmup(args, cfg, output_dir):
     wj_train = load_wildjailbreak_train(n_prompts=n_compliance)      # model complies with these
 
     if cfg.get("AXIS_METHOD") == "mean_diff":
-        compliance_axes, compliance_stats = compute_mean_diff_compliance_axis(
+        compliance_axes, compliance_stats, refusing_acts, compliant_acts = compute_mean_diff_compliance_axis(
             exp, refusing_prompts, wj_train, CAP_LAYERS,
         )
     else:
-        compliance_axes, compliance_stats = compute_pca_compliance_axis(
+        compliance_axes, compliance_stats, refusing_acts, compliant_acts = compute_pca_compliance_axis(
             exp, refusing_prompts, wj_train, CAP_LAYERS,
         )
 
@@ -712,7 +712,7 @@ def do_warmup(args, cfg, output_dir):
         calibration = CALIBRATION_PROMPTS[:cfg["N_CALIBRATION"]]
         compliance_axes, compliance_stats = orthogonalize_compliance_axes(
             exp, compliance_axes, calibration,
-            refusing_prompts, wj_train, CAP_LAYERS,
+            refusing_acts, compliant_acts, CAP_LAYERS,
         )
 
     # How similar are the two axes? Low cosine = they point in different directions
@@ -902,11 +902,11 @@ def do_run(args, cfg, output_dir):
     wj_train = load_wildjailbreak_train(n_prompts=n_compliance)
 
     if cfg.get("AXIS_METHOD") == "mean_diff":
-        compliance_axes, compliance_stats = compute_mean_diff_compliance_axis(
+        compliance_axes, compliance_stats, refusing_acts, compliant_acts = compute_mean_diff_compliance_axis(
             exp, refusing_prompts, wj_train, CAP_LAYERS,
         )
     else:
-        compliance_axes, compliance_stats = compute_pca_compliance_axis(
+        compliance_axes, compliance_stats, refusing_acts, compliant_acts = compute_pca_compliance_axis(
             exp, refusing_prompts, wj_train, CAP_LAYERS,
         )
 
@@ -915,7 +915,7 @@ def do_run(args, cfg, output_dir):
         calibration = CALIBRATION_PROMPTS[:cfg["N_CALIBRATION"]]
         compliance_axes, compliance_stats = orthogonalize_compliance_axes(
             exp, compliance_axes, calibration,
-            refusing_prompts, wj_train, CAP_LAYERS,
+            refusing_acts, compliant_acts, CAP_LAYERS,
         )
 
     cos_val = (compliance_axes[CAP_LAYERS[-1]] @ assistant_axes[CAP_LAYERS[-1]]).item()
