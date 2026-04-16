@@ -892,7 +892,7 @@ def compute_pca_compliance_axis(
             mean_r - mean_c,
         )
 
-    return per_layer_axes, per_layer_stats
+    return per_layer_axes, per_layer_stats, refusing_acts, compliant_acts
 
 
 def compute_mean_diff_compliance_axis(
