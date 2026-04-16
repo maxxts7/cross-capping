@@ -809,79 +809,90 @@ def compute_pca_compliance_axis(
     compliant_prompts: list[str],      # prompts the model complies with (e.g. jailbreaks that work)
     cap_layers: list[int],
     axis_name: str = "pca_compliance",
-) -> torch.Tensor:
-    
+) -> tuple[dict[int, torch.Tensor], dict[int, dict[str, float]]]:
+    """Build per-layer compliance axes via PCA and compute thresholds.
 
+    Runs PCA separately at each cap layer, producing a different compliance
+    direction for each layer. Also computes threshold stats from the same
+    refusing/compliant activations used to build the axis — no separate
+    calibration data needed.
 
-
-
-    """Build the compliance axis via PCA.
-
-    Steps:
-      1. Run each refusing prompt through the model, record the hidden state
-         at the last cap layer.
-      2. Do the same for each compliant prompt.
-      3. Pool all activations, center them, and run SVD.
-      4. Take the first principal component (PC1) -- this is the direction
-         that captures the most variance across refusing vs. compliant runs.
-      5. Flip the sign so PC1 points from compliant *toward* refusing
-         (so capping in this direction pushes the model toward refusal).
-      6. Normalise to unit length.
-
-    Returns a unit vector on CPU, shape (hidden_dim,).
-
+    Returns:
+        per_layer_axes:  dict mapping layer_idx -> unit vector on CPU
+        per_layer_stats: dict mapping layer_idx -> {
+            "mean_refusing", "mean_compliant", "std_refusing", "std_compliant",
+            "optimal" (midpoint), "mean+std" (mean_compliant + std_compliant),
+            "separation", "var_explained"
+        }
     """
-
-
-
-
-
-
-
-
-
-
-    ref_layer = cap_layers[-1]                # use the deepest cap layer for activation collection
     logger.info(
-        "Computing %s PCA compliance axis at L%d (%d refusing, %d compliant)...",
-        axis_name, ref_layer, len(refusing_prompts), len(compliant_prompts),
+        "Computing %s PCA compliance axes at L%d-L%d (%d refusing, %d compliant)...",
+        axis_name, cap_layers[0], cap_layers[-1],
+        len(refusing_prompts), len(compliant_prompts),
     )
 
-    # --- Collect activations from refusing prompts ---
-    refusing_acts, compliant_acts = [], []
+    # --- Collect activations at ALL cap layers in one pass ---
+    refusing_acts = {li: [] for li in cap_layers}
+    compliant_acts = {li: [] for li in cap_layers}
 
     for prompt in tqdm(refusing_prompts, desc=f"  {axis_name} refusing", leave=False):
         ids = exp.tokenize(prompt)
-        acts, _ = exp.get_baseline_trajectory(ids)   # forward pass, grab all layer activations
-        refusing_acts.append(acts[ref_layer].float()) # keep just the reference layer
+        acts, _ = exp.get_baseline_trajectory(ids)
+        for li in cap_layers:
+            refusing_acts[li].append(acts[li].float())
 
-    # --- Collect activations from compliant prompts ---
     for prompt in tqdm(compliant_prompts, desc=f"  {axis_name} compliant", leave=False):
         ids = exp.tokenize(prompt)
         acts, _ = exp.get_baseline_trajectory(ids)
-        compliant_acts.append(acts[ref_layer].float())
+        for li in cap_layers:
+            compliant_acts[li].append(acts[li].float())
 
-    # --- PCA ---
-    refusing_stack  = torch.stack(refusing_acts)      # (n_refusing, hidden_dim)
-    compliant_stack = torch.stack(compliant_acts)      # (n_compliant, hidden_dim)
-    pooled = torch.cat([refusing_stack, compliant_stack], dim=0)  # all activations together
+    # --- Run PCA at each cap layer separately ---
+    per_layer_axes = {}
+    per_layer_stats = {}
+    for li in cap_layers:
+        refusing_stack  = torch.stack(refusing_acts[li])
+        compliant_stack = torch.stack(compliant_acts[li])
+        pooled = torch.cat([refusing_stack, compliant_stack], dim=0)
 
-    pooled_centered = pooled - pooled.mean(dim=0)     # center the data (standard PCA step)
-    _, S, Vt = torch.linalg.svd(pooled_centered, full_matrices=False)
-    pc1 = Vt[0].float()                               # first principal component
+        pooled_centered = pooled - pooled.mean(dim=0)
+        _, S, Vt = torch.linalg.svd(pooled_centered, full_matrices=False)
+        pc1 = Vt[0].float()
 
-    # --- Fix sign so PC1 points from compliant -> refusing ---
-    mean_diff = refusing_stack.mean(0) - compliant_stack.mean(0)
-    if (pc1 @ mean_diff).item() < 0:                  # if PC1 points the wrong way
-        pc1 = -pc1                                     # flip it
+        # Fix sign so PC1 points from compliant -> refusing
+        mean_diff = refusing_stack.mean(0) - compliant_stack.mean(0)
+        if (pc1 @ mean_diff).item() < 0:
+            pc1 = -pc1
 
-    # How much of the total variance does PC1 explain?
-    var_explained = (S[0] ** 2 / (S ** 2).sum()).item() * 100
+        pc1 = pc1 / pc1.norm()
+        var_explained = (S[0] ** 2 / (S ** 2).sum()).item() * 100
+        per_layer_axes[li] = pc1.cpu()
 
-    pc1 = pc1 / pc1.norm()                            # normalise to unit length
-    logger.info("  %s: var_explained=%.1f%%", axis_name, var_explained)
+        # --- Compute threshold stats from refusing/compliant projections ---
+        # On this axis: high = refusing (safe), low = compliant (unsafe)
+        refusing_projs = (refusing_stack @ pc1).numpy()
+        compliant_projs = (compliant_stack @ pc1).numpy()
+        mean_r = float(refusing_projs.mean())
+        mean_c = float(compliant_projs.mean())
+        std_r = float(refusing_projs.std())
+        std_c = float(compliant_projs.std())
+        per_layer_stats[li] = {
+            "mean_refusing":  mean_r,
+            "mean_compliant": mean_c,
+            "std_refusing":   std_r,
+            "std_compliant":  std_c,
+            "optimal":        (mean_r + mean_c) / 2.0,
+            "mean+std":       mean_c + std_c,
+            "separation":     mean_r - mean_c,
+            "var_explained":  var_explained,
+        }
+        logger.info(
+            "  %s L%d: var=%.1f%%  refusing=%.1f+/-%.1f  compliant=%.1f+/-%.1f  sep=%.1f",
+            axis_name, li, var_explained, mean_r, std_r, mean_c, std_c,
+            mean_r - mean_c,
+        )
 
-    return pc1.cpu()
+    return per_layer_axes, per_layer_stats
 
 
 def compute_mean_diff_compliance_axis(
@@ -890,45 +901,69 @@ def compute_mean_diff_compliance_axis(
     compliant_prompts: list[str],
     cap_layers: list[int],
     axis_name: str = "mean_diff_compliance",
-) -> torch.Tensor:
-    
-
-
+) -> tuple[dict[int, torch.Tensor], dict[int, dict[str, float]]]:
     """Simpler alternative: compliance axis = (mean_refusing - mean_compliant).
 
+    Computed per-layer, with threshold stats derived from the same data.
     Less principled than PCA but faster and sometimes works just as well.
-    The result is L2-normalised to unit length.
+    Each result is L2-normalised to unit length.
+
+    Returns:
+        per_layer_axes:  dict mapping layer_idx -> unit vector on CPU
+        per_layer_stats: dict mapping layer_idx -> threshold stats (same format as PCA)
     """
-
-
-
-
-    ref_layer = cap_layers[-1]
     logger.info(
-        "Computing %s mean-diff compliance axis at L%d (%d refusing, %d compliant)...",
-        axis_name, ref_layer, len(refusing_prompts), len(compliant_prompts),
+        "Computing %s mean-diff compliance axes at L%d-L%d (%d refusing, %d compliant)...",
+        axis_name, cap_layers[0], cap_layers[-1],
+        len(refusing_prompts), len(compliant_prompts),
     )
 
-    refusing_acts, compliant_acts = [], []
+    refusing_acts = {li: [] for li in cap_layers}
+    compliant_acts = {li: [] for li in cap_layers}
 
     for prompt in tqdm(refusing_prompts, desc=f"  {axis_name} refusing", leave=False):
         ids = exp.tokenize(prompt)
         acts, _ = exp.get_baseline_trajectory(ids)
-        refusing_acts.append(acts[ref_layer].float())
+        for li in cap_layers:
+            refusing_acts[li].append(acts[li].float())
 
     for prompt in tqdm(compliant_prompts, desc=f"  {axis_name} compliant", leave=False):
         ids = exp.tokenize(prompt)
         acts, _ = exp.get_baseline_trajectory(ids)
-        compliant_acts.append(acts[ref_layer].float())
+        for li in cap_layers:
+            compliant_acts[li].append(acts[li].float())
 
-    refusing_stack = torch.stack(refusing_acts)
-    compliant_stack = torch.stack(compliant_acts)
+    per_layer_axes = {}
+    per_layer_stats = {}
+    for li in cap_layers:
+        refusing_stack = torch.stack(refusing_acts[li])
+        compliant_stack = torch.stack(compliant_acts[li])
+        md = refusing_stack.mean(0) - compliant_stack.mean(0)
+        md = md / md.norm()
+        per_layer_axes[li] = md.cpu()
 
-    mean_diff = refusing_stack.mean(0) - compliant_stack.mean(0)  # direction from compliant to refusing
-    mean_diff = mean_diff / mean_diff.norm()                       # normalise
+        # Threshold stats from projections onto this axis
+        refusing_projs = (refusing_stack @ md).numpy()
+        compliant_projs = (compliant_stack @ md).numpy()
+        mean_r = float(refusing_projs.mean())
+        mean_c = float(compliant_projs.mean())
+        std_r = float(refusing_projs.std())
+        std_c = float(compliant_projs.std())
+        per_layer_stats[li] = {
+            "mean_refusing":  mean_r,
+            "mean_compliant": mean_c,
+            "std_refusing":   std_r,
+            "std_compliant":  std_c,
+            "optimal":        (mean_r + mean_c) / 2.0,
+            "mean+std":       mean_c + std_c,
+            "separation":     mean_r - mean_c,
+        }
+        logger.info(
+            "  %s L%d: refusing=%.1f+/-%.1f  compliant=%.1f+/-%.1f  sep=%.1f",
+            axis_name, li, mean_r, std_r, mean_c, std_c, mean_r - mean_c,
+        )
 
-    logger.info("  %s: axis computed (L2-normalised)", axis_name)
-    return mean_diff.cpu()
+    return per_layer_axes, per_layer_stats
 
 
 # ---------------------------------------------------------------------------
@@ -1087,7 +1122,7 @@ def generate_cross_capped(
     input_ids: torch.Tensor,
     cap_layers: list[int],
     per_layer_detect_axes: dict[int, torch.Tensor],  # per-layer assistant axes for detection
-    correct_axis: torch.Tensor,                  # compliance axis -- used for the actual correction
+    correct_axes: dict[int, torch.Tensor],       # per-layer compliance axes for correction
     detect_thresholds: dict[int, float],          # per-layer thresholds for detection
     correct_thresholds: dict[int, float],         # per-layer thresholds for correction
     track_layers: list[int],
@@ -1124,7 +1159,7 @@ def generate_cross_capped(
         _CrossAxisCappingHook(
             exp.layers[layer_idx],
             per_layer_detect_axes[layer_idx], detect_thresholds[layer_idx],  # gate: assistant axis
-            correct_axis, correct_thresholds[layer_idx],                     # correction: compliance axis
+            correct_axes[layer_idx], correct_thresholds[layer_idx],          # correction: compliance axis
         )
         for layer_idx in cap_layers
     ]
