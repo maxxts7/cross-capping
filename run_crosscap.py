@@ -334,11 +334,17 @@ def load_alpaca_eval(n_prompts=None):
 
     Returns a list of prompt strings.
     """
-    from datasets import load_dataset
+    import json
+    from huggingface_hub import hf_hub_download
     logger.info("Loading tatsu-lab/alpaca_eval...")
-    ds = load_dataset("tatsu-lab/alpaca_eval", "alpaca_eval", trust_remote_code=True)
-    split = "eval" if "eval" in ds else list(ds.keys())[0]
-    prompts = [row["instruction"] for row in ds[split]]
+    path = hf_hub_download(
+        repo_id="tatsu-lab/alpaca_eval",
+        filename="alpaca_eval.json",
+        repo_type="dataset",
+    )
+    with open(path, "r") as f:
+        data = json.load(f)
+    prompts = [row["instruction"] for row in data]
     if n_prompts is not None:
         prompts = prompts[:n_prompts]
     logger.info("Loaded %d AlpacaEval prompts", len(prompts))
