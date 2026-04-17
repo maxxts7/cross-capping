@@ -183,11 +183,16 @@ def load_axis(path: str) -> torch.Tensor:
     The file can be either a raw tensor or a dict with an 'axis' key --
     this function handles both formats. Returns shape (num_layers, hidden_dim).
     """
-    data = torch.load(path, map_location="cpu", weights_only=False)
+    try:
+        data = torch.load(path, map_location="cpu", weights_only=False)
+    except (OSError, RuntimeError) as e:
+        raise ValueError(f"Failed to load axis from {path}: {e}") from e
     if isinstance(data, dict):              # some files wrap the tensor in a dict
         if "axis" in data:
             return data["axis"]
-        raise ValueError("Expected 'axis' key in saved dict")
+        raise ValueError(
+            f"Axis file {path} is a dict but has no 'axis' key (keys: {sorted(data.keys())})"
+        )
     return data                             # raw tensor
 
 

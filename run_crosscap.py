@@ -76,6 +76,7 @@ import argparse
 import json
 import logging
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -279,6 +280,20 @@ CALIBRATION_PROMPTS = [
 #      both capping methods on. NOT used for axis or threshold computation.
 # ============================================================
 
+@contextmanager
+def _loading(label: str):
+    """Wrap dataset/network fetches so a failure points at the source.
+
+    Raw HuggingFace errors often bury which dataset actually broke under
+    auth or network noise; relabelling here makes an ops-level "X is down"
+    obvious without losing the original traceback.
+    """
+    try:
+        yield
+    except Exception as e:
+        raise RuntimeError(f"Failed to load {label}: {e}") from e
+
+
 def load_jbb_behaviors(n_prompts=None):
     """Load bare harmful goals from JailbreakBench.
 
@@ -290,7 +305,8 @@ def load_jbb_behaviors(n_prompts=None):
     """
     from datasets import load_dataset            # lazy import to avoid slow startup
     logger.info("Loading JailbreakBench/JBB-Behaviors...")
-    ds = load_dataset("JailbreakBench/JBB-Behaviors", "behaviors")
+    with _loading("JailbreakBench/JBB-Behaviors"):
+        ds = load_dataset("JailbreakBench/JBB-Behaviors", "behaviors")
     split = list(ds.keys())[0]                    # grab whichever split is available
     goals = [row["Goal"] for row in ds[split]]    # extract just the goal text
     if n_prompts is not None:
@@ -311,11 +327,12 @@ def load_wildjailbreak_train(n_prompts=None):
     """
     from datasets import load_dataset
     logger.info("Loading allenai/wildjailbreak (train, adversarial_harmful)...")
-    ds = load_dataset(
-        "allenai/wildjailbreak", "train",
-        delimiter="\t",                           # WildJailbreak uses TSV format
-        keep_default_na=False,                    # don't convert "NA" strings to NaN
-    )
+    with _loading("allenai/wildjailbreak (train split)"):
+        ds = load_dataset(
+            "allenai/wildjailbreak", "train",
+            delimiter="\t",                           # WildJailbreak uses TSV format
+            keep_default_na=False,                    # don't convert "NA" strings to NaN
+        )
     split = "train" if "train" in ds else list(ds.keys())[0]
     ds = ds[split]
 
@@ -345,13 +362,14 @@ def load_alpaca_eval(n_prompts=None):
     import json
     from huggingface_hub import hf_hub_download
     logger.info("Loading tatsu-lab/alpaca_eval...")
-    path = hf_hub_download(
-        repo_id="tatsu-lab/alpaca_eval",
-        filename="alpaca_eval.json",
-        repo_type="dataset",
-    )
-    with open(path, "r") as f:
-        data = json.load(f)
+    with _loading("tatsu-lab/alpaca_eval"):
+        path = hf_hub_download(
+            repo_id="tatsu-lab/alpaca_eval",
+            filename="alpaca_eval.json",
+            repo_type="dataset",
+        )
+        with open(path, "r") as f:
+            data = json.load(f)
     prompts = [row["instruction"] for row in data]
     if n_prompts is not None:
         prompts = prompts[:n_prompts]
@@ -375,11 +393,12 @@ def load_jailbreak_dataset(n_prompts=None):
     from datasets import load_dataset
     logger.info("Loading allenai/wildjailbreak (eval, adversarial_harmful)...")
 
-    ds = load_dataset(
-        "allenai/wildjailbreak", "eval",
-        delimiter="\t",
-        keep_default_na=False,
-    )
+    with _loading("allenai/wildjailbreak (eval split)"):
+        ds = load_dataset(
+            "allenai/wildjailbreak", "eval",
+            delimiter="\t",
+            keep_default_na=False,
+        )
     split = "train" if "train" in ds else list(ds.keys())[0]
     ds = ds[split]
 
@@ -594,25 +613,23 @@ def save_results(df, output_dir, args, cos_val, cfg, elapsed, cap_layers, cross_
     jb = df[df["prompt_type"] == "jailbreak"]
     bn = df[df["prompt_type"] == "benign"]
 
-    def save_cap_csv(subset, cap_applied_col, cap_layers_col, cap_text_col, path):
-        """Extract the relevant columns for one capping method and save."""
+    def save_cap_csv(subset, method, path):
+        """Extract the columns belonging to one capping method and save."""
         out = subset[["prompt_idx", "prompt_text", "baseline_text"]].copy()
-        out["correction_applied"] = subset[cap_applied_col]   # Yes/No
-        out["layers"] = subset[cap_layers_col]                 # e.g. "L46,L47,L48"
-        out["capped_text"] = subset[cap_text_col]              # the actual output text
+        out["correction_applied"] = subset[f"{method}_cap_applied"]   # Yes/No
+        out["layers"] = subset[f"{method}_cap_layers"]                 # e.g. "L46,L47,L48"
+        out["capped_text"] = subset[f"{method}_cap_text"]              # the actual output text
         out.to_csv(path, index=False)
         return out
 
-    # Save the 4 (or 2) CSV files
-    if not cross_only:
-        jb_assist = save_cap_csv(jb, "assistant_cap_applied", "assistant_cap_layers",
-                                 "assistant_cap_text", output_dir / "assistant_cap_jailbreak.csv")
-        bn_assist = save_cap_csv(bn, "assistant_cap_applied", "assistant_cap_layers",
-                                 "assistant_cap_text", output_dir / "assistant_cap_benign.csv")
-    jb_cross  = save_cap_csv(jb, "cross_cap_applied", "cross_cap_layers",
-                             "cross_cap_text", output_dir / "cross_cap_jailbreak.csv")
-    bn_cross  = save_cap_csv(bn, "cross_cap_applied", "cross_cap_layers",
-                             "cross_cap_text", output_dir / "cross_cap_benign.csv")
+    # Build a (method, subset_label, subset_df) grid and save one CSV per cell.
+    methods = ["cross"] if cross_only else ["assistant", "cross"]
+    subsets = [("jailbreak", jb), ("benign", bn)]
+    saved: dict[tuple[str, str], pd.DataFrame] = {}
+    for method in methods:
+        for subset_label, subset in subsets:
+            path = output_dir / f"{method}_cap_{subset_label}.csv"
+            saved[(method, subset_label)] = save_cap_csv(subset, method, path)
 
     # Save a metadata file recording all the experiment parameters
     metadata = {
@@ -648,11 +665,10 @@ def save_results(df, output_dir, args, cos_val, cfg, elapsed, cap_layers, cross_
         print(f"  Assistant cap fired: {(bn['assistant_cap_applied'] == 'Yes').sum()}/{len(bn)}")
     print(f"  Cross cap corrected: {(bn['cross_cap_applied'] == 'Yes').sum()}/{len(bn)}")
     print(f"\nSaved to {output_dir}/")
-    if not cross_only:
-        print(f"  assistant_cap_jailbreak.csv  ({len(jb_assist)} rows)")
-        print(f"  assistant_cap_benign.csv     ({len(bn_assist)} rows)")
-    print(f"  cross_cap_jailbreak.csv      ({len(jb_cross)} rows)")
-    print(f"  cross_cap_benign.csv         ({len(bn_cross)} rows)")
+    for method in methods:
+        for subset_label, _ in subsets:
+            name = f"{method}_cap_{subset_label}.csv"
+            print(f"  {name:<28} ({len(saved[(method, subset_label)])} rows)")
     print(f"  metadata.json")
 
 
