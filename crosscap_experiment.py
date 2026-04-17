@@ -979,6 +979,7 @@ def compute_pca_compliance_axis(
         mean_c = float(compliant_projs.mean())
         std_r = float(refusing_projs.std())
         std_c = float(compliant_projs.std())
+        p25 = float(np.percentile(np.concatenate([refusing_projs, compliant_projs]), 25))
         per_layer_stats[li] = {
             "mean_refusing":  mean_r,
             "mean_compliant": mean_c,
@@ -986,6 +987,7 @@ def compute_pca_compliance_axis(
             "std_compliant":  std_c,
             "optimal":        (mean_r + mean_c) / 2.0,
             "mean+std":       mean_c + std_c,
+            "p25":            p25,
             "separation":     mean_r - mean_c,
             "var_explained":  var_explained,
         }
@@ -1052,6 +1054,7 @@ def compute_mean_diff_compliance_axis(
         mean_c = float(compliant_projs.mean())
         std_r = float(refusing_projs.std())
         std_c = float(compliant_projs.std())
+        p25 = float(np.percentile(np.concatenate([refusing_projs, compliant_projs]), 25))
         per_layer_stats[li] = {
             "mean_refusing":  mean_r,
             "mean_compliant": mean_c,
@@ -1059,6 +1062,7 @@ def compute_mean_diff_compliance_axis(
             "std_compliant":  std_c,
             "optimal":        (mean_r + mean_c) / 2.0,
             "mean+std":       mean_c + std_c,
+            "p25":            p25,
             "separation":     mean_r - mean_c,
         }
         logger.info(
@@ -1130,6 +1134,7 @@ def orthogonalize_compliance_axes(
         mean_c = float(compliant_projs.mean())
         std_r = float(refusing_projs.std())
         std_c = float(compliant_projs.std())
+        p25 = float(np.percentile(np.concatenate([refusing_projs, compliant_projs]), 25))
         orth_stats[li] = {
             "mean_refusing":  mean_r,
             "mean_compliant": mean_c,
@@ -1137,6 +1142,7 @@ def orthogonalize_compliance_axes(
             "std_compliant":  std_c,
             "optimal":        (mean_r + mean_c) / 2.0,
             "mean+std":       mean_c + std_c,
+            "p25":            p25,
             "separation":     mean_r - mean_c,
         }
 

@@ -132,7 +132,7 @@ PRESETS = {
         "N_COMPLIANCE": 50,
         "N_DETECT_CAL": 50,       # benign CALIBRATION_PROMPTS + held-out WJ-train
         "N_BENIGN_EVAL": 10,
-        "MAX_NEW_TOKENS": 64,
+        "MAX_NEW_TOKENS": 256,    # matches full preset and the judge's assumption
         "OUTPUT_DIR": "results/crosscap_sanity",
     },
     # Development preset: enough prompts to see patterns, fast enough to iterate
@@ -553,8 +553,7 @@ def _compliance_tau(stats: dict, method: str) -> float:
     elif method == "mean":
         return stats["mean_compliant"]
     elif method == "p25":
-        # Not available from compliance stats -- fall back to midpoint
-        return stats["optimal"]
+        return stats["p25"]
     raise ValueError(f"Unknown compliance threshold method: {method}")
 
 
