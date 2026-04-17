@@ -12,13 +12,13 @@
 #   ./run_qwen.sh full p25                       # full run with 25th percentile threshold
 #   ./run_qwen.sh full mean+std benign-p1        # full run, tighter cross-cap detect gate
 #
-# Compliance threshold options:  mean+std (default), optimal, optimal75, mean, p25
+# Compliance threshold options:  optimal75 (default), optimal, mean+std, mean, p25
 # Cross-detect method options:   benign-p1 (default), benign-p5, benign-p10, midpoint
 
 set -e
 
 PRESET="${1:-full}"
-THRESHOLD="${2:-mean+std}"
+THRESHOLD="${2:-optimal75}"
 CROSS_DETECT="${3:-benign-p1}"
 OUTPUT_DIR="results/crosscap_qwen_${PRESET}_${THRESHOLD}_${CROSS_DETECT}"
 

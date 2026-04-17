@@ -688,7 +688,7 @@ def save_results(df, output_dir, args, cos_val, cfg, elapsed, cap_layers, cross_
         "timestamp": datetime.now().isoformat(),
         "cos_similarity": cos_val,                             # how similar the two axes are
         "assistant_threshold_method": "paper (load_original_capping) -- used by Mode 2",
-        "compliance_threshold_method": cfg.get("COMPLIANCE_THRESHOLD", "mean+std"),
+        "compliance_threshold_method": cfg.get("COMPLIANCE_THRESHOLD", "optimal75"),
         "cross_detect_method": cfg.get("CROSS_DETECT_METHOD", "benign-p5"),
         "n_detect_cal": cfg.get("N_DETECT_CAL"),
         "orthogonalize": cfg.get("ORTHOGONALIZE", False),
@@ -1158,14 +1158,15 @@ def parse_args():
         help="Override CAP_LAYERS range, e.g. '33-39' for layers 33 through 38",
     )
     parser.add_argument(
-        "--compliance-threshold", type=str, default="mean+std",
+        "--compliance-threshold", type=str, default="optimal75",
         choices=["mean+std", "optimal", "optimal75", "mean", "p25"],
         help="Compliance axis threshold method: "
-             "mean+std = mean_compliant + std_compliant (default), "
-             "optimal = midpoint (alpha=0.5) between compliant and refusing means, "
-             "optimal75 = alpha=0.75 (stricter floor than optimal, same clamp mechanism), "
-             "mean = mean_compliant, "
-             "p25 = 25th percentile of pooled refusing+compliant projections",
+             "optimal75 = alpha=0.75, 3/4 of the way from mean_compliant toward "
+             "mean_refusing; stricter floor than optimal (default). "
+             "optimal = midpoint (alpha=0.5) between compliant and refusing means. "
+             "mean+std = mean_compliant + std_compliant. "
+             "mean = mean_compliant. "
+             "p25 = 25th percentile of pooled refusing+compliant projections.",
     )
     parser.add_argument(
         "--orthogonalize", action="store_true",
