@@ -98,6 +98,33 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # ---------------------------------------------------------------------------
 
 logger = logging.getLogger("crosscap")
+
+
+# ---------------------------------------------------------------------------
+# Invariant assertions
+# ---------------------------------------------------------------------------
+# Capping is a directional correction: its math only reaches the intended
+# target when axes are unit vectors, orthogonalized axes are actually
+# orthogonal, and signs are fixed so refusing > compliant along the axis.
+# These one-shot checks catch silent corruption (e.g. a renormalization
+# step that got dropped during a refactor) before it rolls into a run.
+
+_NORM_TOL = 1e-4      # tolerance on ||v|| == 1
+_ORTH_TOL = 1e-4      # tolerance on v @ w == 0
+
+
+def _assert_unit_norm(v: torch.Tensor, label: str, tol: float = _NORM_TOL) -> None:
+    n = v.norm().item()
+    if abs(n - 1.0) > tol:
+        raise AssertionError(f"{label}: expected unit norm, got |v|={n:.6f} (tol={tol})")
+
+
+def _assert_orthogonal(v: torch.Tensor, w: torch.Tensor, label: str, tol: float = _ORTH_TOL) -> None:
+    dot = (v @ w).item()
+    if abs(dot) > tol:
+        raise AssertionError(f"{label}: expected orthogonal axes, got v@w={dot:.6f} (tol={tol})")
+
+
 if not logger.handlers:                     # only configure once, even if imported twice
     _handler = logging.StreamHandler()
     _handler.setFormatter(logging.Formatter(
@@ -438,6 +465,8 @@ class _AxisProjectionTracker:
     def __init__(self, layer_module: nn.Module, axis_vector: torch.Tensor):
         self._layer = layer_module           # which transformer layer to watch
         self._axis = axis_vector.float()     # the direction to measure against
+        # Projection math assumes a unit vector: cos(h, v) = h @ v only when |v|=1.
+        _assert_unit_norm(self._axis, "projection tracker axis")
         self._axis_device = None             # lazily moved to GPU on first call
         self._projections: list = []         # one entry per generation step
         self._handle = None                  # PyTorch hook handle (for cleanup)
@@ -503,6 +532,8 @@ class _CappingHook:
     ):
         self._layer = layer_module
         self._axis = axis_unit.float()
+        # Capping formula h <- h - v*(proj-tau) only reaches tau exactly when |v|=1.
+        _assert_unit_norm(self._axis, "single-axis capping vector")
         self._tau = threshold
         self._axis_device: Optional[torch.Tensor] = None   # lazily moved to GPU
         self.n_interventions = 0       # counts how many times capping actually fired
@@ -581,6 +612,9 @@ class _CrossAxisCappingHook:
         self._tau_detect = detect_threshold
         self._correct_axis = correct_axis.float()
         self._tau_correct = correct_threshold
+        # Both gates use projection math that assumes unit vectors.
+        _assert_unit_norm(self._detect_axis, "cross-cap detection axis")
+        _assert_unit_norm(self._correct_axis, "cross-cap correction axis")
         self._detect_device: Optional[torch.Tensor] = None    # lazily moved to GPU
         self._correct_device: Optional[torch.Tensor] = None
         self.n_triggered = 0             # detection axis fired (gate opened)
@@ -831,6 +865,11 @@ def compute_pca_compliance_axis(
             pc1 = -pc1
 
         pc1 = pc1 / pc1.norm()
+        _assert_unit_norm(pc1, f"PCA compliance axis L{li}")
+        # Sign invariant: refusing should project higher than compliant.
+        assert (pc1 @ mean_diff).item() >= 0, (
+            f"PCA compliance axis L{li}: sign flip -- refusing projects below compliant"
+        )
         var_explained = (S[0] ** 2 / (S ** 2).sum()).item() * 100
         per_layer_axes[li] = pc1.cpu()
 
@@ -908,6 +947,7 @@ def compute_mean_diff_compliance_axis(
         compliant_stack = torch.stack(compliant_acts[li])
         md = refusing_stack.mean(0) - compliant_stack.mean(0)
         md = md / md.norm()
+        _assert_unit_norm(md, f"mean-diff compliance axis L{li}")
         per_layer_axes[li] = md.cpu()
 
         # Threshold stats from projections onto this axis
@@ -986,6 +1026,8 @@ def orthogonalize_compliance_axes(
         overlap = (comp @ benign_dir).item()
         orth = comp - overlap * benign_dir
         orth = orth / orth.norm()
+        _assert_unit_norm(orth, f"orthogonalized compliance axis L{li}")
+        _assert_orthogonal(orth, benign_dir, f"orthogonalized compliance axis L{li} vs benign_dir")
         orth_axes[li] = orth.cpu()
 
         # Recompute threshold stats on the orthogonalized axis
