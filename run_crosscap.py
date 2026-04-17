@@ -510,7 +510,7 @@ def run_experiment(
         # Detect on the assistant axis, correct on the compliance axis
         cross_ids = None
         try:
-            cross_ids, _, _, n_triggered, n_corrected, cross_active = generate_cross_capped(
+            cross_ids, _, _, n_triggered, n_corrected, cross_active, per_layer_events = generate_cross_capped(
                 exp, input_ids, cap_layers,
                 per_layer_detect_axes=assistant_axes,  # "is this a jailbreak?" (gate)
                 correct_axes=compliance_axes,          # "push toward refusal" (correction)
@@ -531,6 +531,7 @@ def run_experiment(
             n_corrected = 0
             cross_active = []
             cross_text = "NA"
+            per_layer_events = {}
 
         # --- Collect results for this prompt into one row ---
         rows.append({
@@ -544,6 +545,18 @@ def run_experiment(
             "cross_cap_applied": "Yes" if n_corrected > 0 else "No",
             "cross_cap_layers": ",".join(f"L{li}" for li in cross_active) if cross_active else "",
             "cross_cap_text": cross_text if n_corrected > 0 else "NA",
+            # Per-layer firing count: "L46=3;L47=1". Quick filter/sort column
+            # without having to parse the full trace.
+            "cross_cap_fires_per_layer": ";".join(
+                f"L{li}={len(events)}" for li, events in per_layer_events.items()
+            ),
+            # Full per-firing trace as JSON: {"L46": [[step, token, mag], ...]}.
+            # step=0 means prefill (the last prompt token's activation produced
+            # the correction, influencing the 1st generated token). step=k>=1
+            # means the forward pass processing the k-th-position token.
+            "cross_cap_push_trace": _format_push_trace(
+                per_layer_events, cross_ids, prompt_len, exp.tokenizer
+            ) if cross_ids is not None else "",
         })
 
         # Free GPU memory between prompts to avoid OOM on long runs
@@ -557,6 +570,30 @@ def run_experiment(
 # HELPERS
 # ============================================================
 
+def _format_push_trace(per_layer_events, cross_ids, prompt_len, tokenizer) -> str:
+    """JSON-encode the per-layer firing trace with decoded tokens.
+
+    Format: {"L46": [[step, "token", mag], ...], "L47": [...]}. step=0 is
+    prefill (maps to the last prompt token's activation); step=k>=1 maps to
+    the token at sequence position prompt_len + k - 1 being processed, which
+    produces the logit for the next token.
+    """
+    seq = cross_ids[0]
+    seq_len = seq.shape[0]
+    trace = {}
+    for li, events in per_layer_events.items():
+        rows = []
+        for step, mag in events:
+            pos = prompt_len - 1 + step
+            if 0 <= pos < seq_len:
+                tok = tokenizer.decode([seq[pos].item()], skip_special_tokens=False)
+            else:
+                tok = "<oob>"
+            rows.append([step, tok, round(mag, 3)])
+        trace[f"L{li}"] = rows
+    return json.dumps(trace, ensure_ascii=False)
+
+
 def _compliance_tau(stats: dict, method: str) -> float:
     """Compute the compliance threshold from per-layer stats using the chosen method.
 
@@ -567,6 +604,11 @@ def _compliance_tau(stats: dict, method: str) -> float:
         return stats["mean_compliant"] + stats["std_compliant"]
     elif method == "optimal":
         return stats["optimal"]
+    elif method == "optimal75":
+        # Alpha=0.75: 3/4 of the way from mean_compliant toward mean_refusing.
+        # Strictly higher floor than optimal (alpha=0.5); stays within the
+        # clamp mechanism -- just a stricter threshold, no active push.
+        return stats["mean_compliant"] + 0.75 * (stats["mean_refusing"] - stats["mean_compliant"])
     elif method == "mean":
         return stats["mean_compliant"]
     elif method == "p25":
@@ -619,6 +661,10 @@ def save_results(df, output_dir, args, cos_val, cfg, elapsed, cap_layers, cross_
         out["correction_applied"] = subset[f"{method}_cap_applied"]   # Yes/No
         out["layers"] = subset[f"{method}_cap_layers"]                 # e.g. "L46,L47,L48"
         out["capped_text"] = subset[f"{method}_cap_text"]              # the actual output text
+        # Cross-cap tracks per-layer push magnitudes; assistant-cap doesn't.
+        if method == "cross":
+            out["fires_per_layer"] = subset["cross_cap_fires_per_layer"]
+            out["push_trace"]      = subset["cross_cap_push_trace"]
         out.to_csv(path, index=False)
         return out
 
@@ -656,14 +702,44 @@ def save_results(df, output_dir, args, cos_val, cfg, elapsed, cap_layers, cross_
     print(f"\n{'=' * 50}")
     print(f"Results ({elapsed / 60:.1f} min)")
     print(f"{'=' * 50}")
+    def _print_per_layer(subset, label):
+        """Show, for each cap layer, (total firings, total push) across the
+        subset. Lets you see where in the network the correction is actually
+        doing work: firings cluster at some depth, push magnitude at another."""
+        fired = subset[subset["cross_cap_applied"] == "Yes"]
+        if len(fired) == 0:
+            print(f"    per-layer: (no firings)")
+            return
+        layer_fires: dict[str, int] = {}
+        layer_push: dict[str, float] = {}
+        for raw in fired["cross_cap_push_trace"]:
+            if not raw:
+                continue
+            try:
+                trace = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            for layer, events in trace.items():
+                mags = [e[2] for e in events]
+                layer_fires[layer] = layer_fires.get(layer, 0) + len(mags)
+                layer_push[layer] = layer_push.get(layer, 0.0) + sum(mags)
+        for layer in sorted(layer_fires, key=lambda s: int(s[1:])):
+            print(
+                f"    {layer}: fires={layer_fires[layer]:4d}  "
+                f"push_total={layer_push[layer]:7.2f}  "
+                f"push_mean={layer_push[layer] / max(layer_fires[layer], 1):.3f}"
+            )
+
     print(f"\nJailbreak prompts ({len(jb)}):")
     if not cross_only:
         print(f"  Assistant cap fired: {(jb['assistant_cap_applied'] == 'Yes').sum()}/{len(jb)}")
     print(f"  Cross cap corrected: {(jb['cross_cap_applied'] == 'Yes').sum()}/{len(jb)}")
+    _print_per_layer(jb, "jailbreak")
     print(f"\nBenign prompts ({len(bn)}):")
     if not cross_only:
         print(f"  Assistant cap fired: {(bn['assistant_cap_applied'] == 'Yes').sum()}/{len(bn)}")
     print(f"  Cross cap corrected: {(bn['cross_cap_applied'] == 'Yes').sum()}/{len(bn)}")
+    _print_per_layer(bn, "benign")
     print(f"\nSaved to {output_dir}/")
     for method in methods:
         for subset_label, _ in subsets:
@@ -1083,12 +1159,13 @@ def parse_args():
     )
     parser.add_argument(
         "--compliance-threshold", type=str, default="mean+std",
-        choices=["mean+std", "optimal", "mean", "p25"],
+        choices=["mean+std", "optimal", "optimal75", "mean", "p25"],
         help="Compliance axis threshold method: "
-             "mean+std = mean_jailbreak + std_jailbreak (default), "
-             "optimal = midpoint of benign/jailbreak means, "
-             "mean = mean_jailbreak, "
-             "p25 = 25th percentile of combined",
+             "mean+std = mean_compliant + std_compliant (default), "
+             "optimal = midpoint (alpha=0.5) between compliant and refusing means, "
+             "optimal75 = alpha=0.75 (stricter floor than optimal, same clamp mechanism), "
+             "mean = mean_compliant, "
+             "p25 = 25th percentile of pooled refusing+compliant projections",
     )
     parser.add_argument(
         "--orthogonalize", action="store_true",
@@ -1099,12 +1176,12 @@ def parse_args():
              "same prompts.",
     )
     parser.add_argument(
-        "--cross-detect-method", type=str, default="benign-p5",
+        "--cross-detect-method", type=str, default="benign-p1",
         choices=["benign-p1", "benign-p5", "benign-p10", "midpoint"],
         help="How to place the cross-cap DETECTION threshold on the assistant "
              "axis, recomputed from your benign + jailbreak calibration prompts. "
-             "benign-p1 = 1st percentile (<=1%% benign FP; most selective). "
-             "benign-p5 = 5th percentile (<=5%% benign FP; default). "
+             "benign-p1 = 1st percentile (<=1%% benign FP; most selective; default). "
+             "benign-p5 = 5th percentile (<=5%% benign FP). "
              "benign-p10 = 10th percentile (<=10%% benign FP; most permissive). "
              "midpoint = (mean_benign + mean_jailbreak) / 2 (symmetric "
              "discriminative boundary). The paper's assistant_taus are kept "

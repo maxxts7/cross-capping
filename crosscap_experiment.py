@@ -624,6 +624,13 @@ class _CrossAxisCappingHook:
         self._correct_device: Optional[torch.Tensor] = None
         self.n_triggered = 0             # detection axis fired (gate opened)
         self.n_corrected = 0             # correction was also needed and applied
+        # One event per firing: (step_index, magnitude).
+        # step_index = 0 is prefill (last prompt token); step_index k>=1 is the
+        # forward pass producing logits for the k-th generated token. The
+        # magnitude equals |delta| = (tau_correct - correct_proj), i.e. how far
+        # h was shoved along the unit-norm correction axis at that firing.
+        self.correction_events: list[tuple[int, float]] = []
+        self._step_counter = 0
         self._handle = None
 
     def __enter__(self):
@@ -652,9 +659,15 @@ class _CrossAxisCappingHook:
                 correct_proj = (h_last @ self._correct_device).item()
                 if correct_proj < self._tau_correct:
                     # Push h along the correction axis to reach the threshold
-                    delta = (self._tau_correct - correct_proj) * self._correct_device.to(h.dtype)
+                    push = self._tau_correct - correct_proj
+                    delta = push * self._correct_device.to(h.dtype)
                     h[0, -1, :].add_(delta)  # in-place modification
                     self.n_corrected += 1
+                    self.correction_events.append((self._step_counter, push))
+
+            # Advance the step counter whether or not the gates opened, so the
+            # step index always reflects the forward-pass ordering.
+            self._step_counter += 1
 
             # Re-pack into the original output format
             if torch.is_tensor(output):
@@ -1223,6 +1236,14 @@ def generate_cross_capped(
         n_triggered:      how many times the detection gate opened
         n_corrected:      how many times correction was actually applied
         corrected_layers: which layers applied at least one correction
+        per_layer_events: {layer_idx -> list[(step, magnitude)]} for each cap
+                          layer that fired at least once. step=0 is prefill
+                          (last prompt token's activation); step=k>=1 is the
+                          forward pass processing the k-th-position token and
+                          producing logits for the (k+1)-th. Magnitude is the
+                          L2 distance h was shoved by that firing. Decoding
+                          the token at each step is the caller's job (needs
+                          prompt_len + output.sequences).
     """
 
 
@@ -1270,4 +1291,11 @@ def generate_cross_capped(
     n_triggered = sum(h.n_triggered for h in hooks)
     n_corrected = sum(h.n_corrected for h in hooks)
     corrected_layers = [li for li, h in zip(cap_layers, hooks) if h.n_corrected > 0]
-    return output.sequences, output.scores, projs, n_triggered, n_corrected, corrected_layers
+    # Per-layer firing events: (step_index, magnitude) per firing. Only layers
+    # that fired are included; step order within each layer is preserved.
+    per_layer_events = {
+        li: list(h.correction_events)
+        for li, h in zip(cap_layers, hooks)
+        if h.n_corrected > 0
+    }
+    return output.sequences, output.scores, projs, n_triggered, n_corrected, corrected_layers, per_layer_events
