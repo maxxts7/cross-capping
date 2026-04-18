@@ -51,8 +51,8 @@ Multi-GPU (recommended for the full 100-prompt run):
      Build the compliance axis (PCA or mean-diff)
      Compute per-layer COMPLIANCE thresholds from refusing/compliant projections
      Compute per-layer CROSS-CAP DETECTION thresholds on the assistant axis
-       from your own benign (CALIBRATION_PROMPTS) + jailbreak (held-out WJ-train)
-       calibration prompts -- paper's assistant_taus kept untouched for Mode 2
+       from your own benign CALIBRATION_PROMPTS -- paper's assistant_taus
+       kept untouched for Mode 2
      Save everything to warmup.pt
 
   2. GENERATION (per prompt)
@@ -130,7 +130,7 @@ PRESETS = {
         "N_PROMPTS": 10,
         "N_CALIBRATION": 50,
         "N_COMPLIANCE": 50,
-        "N_DETECT_CAL": 50,       # benign CALIBRATION_PROMPTS + held-out WJ-train
+        "N_DETECT_CAL": 50,       # benign CALIBRATION_PROMPTS used for detect-tau
         "N_BENIGN_EVAL": 10,
         "MAX_NEW_TOKENS": 256,    # matches full preset and the judge's assumption
         "OUTPUT_DIR": "results/crosscap_sanity",
@@ -181,16 +181,12 @@ PRESETS = {
 
 MODEL_NAME    = "Qwen/Qwen3-32B"   # the model we're capping
 AXIS_PATH     = None                # None = auto-download the assistant axis from HuggingFace
-DETERMINISTIC = True                # lock down randomness for reproducibility
 
 # Which layers to apply capping at.
 # We target the upper quarter of the network where safety-relevant signals
 # are strongest. For Qwen3-32B (64 layers total), that's L46-L53
 # (8 layers, roughly 72-84% of the way through the network).
 CAP_LAYERS = list(range(46, 54))
-
-TEMPERATURE   = 1.0                 # generation temperature (irrelevant when do_sample=False)
-DO_SAMPLE     = False               # False = greedy decoding (always pick the most likely token)
 
 
 # ============================================================
@@ -456,10 +452,6 @@ def run_experiment(
     Returns a DataFrame with one row per prompt containing the generated
     text from each mode, plus which layers fired and whether capping was applied.
     """
-    final_layer = exp.num_layers - 1                          # last layer in the model
-    track_layers = sorted({cap_layers[-1], final_layer})      # monitor projections at these layers
-    axis_directions = {"assistant": assistant_axes}            # axes to track during baseline
-
     rows = []
 
     for i, prompt in enumerate(prompts):
@@ -477,10 +469,7 @@ def run_experiment(
         # --- Mode 1: Baseline (no capping) ---
         # This is the control -- what the model says without any intervention.
         try:
-            bl_ids, bl_scores, bl_projs = generate_baseline(
-                exp, input_ids, axis_directions, track_layers,
-                max_new_tokens, TEMPERATURE, DO_SAMPLE,
-            )
+            bl_ids = generate_baseline(exp, input_ids, max_new_tokens)
             bl_text = exp.tokenizer.decode(
                 bl_ids[0, prompt_len:], skip_special_tokens=True  # decode only the generated part
             )
@@ -496,9 +485,9 @@ def run_experiment(
         cap_text = "NA"
         if not cross_only:
             try:
-                cap_ids, _, _, n_cap, cap_active = generate_capped(
+                cap_ids, n_cap, cap_active = generate_capped(
                     exp, input_ids, cap_layers, assistant_axes, assistant_taus,
-                    track_layers, max_new_tokens, TEMPERATURE, DO_SAMPLE,
+                    max_new_tokens,
                 )
                 cap_text = exp.tokenizer.decode(
                     cap_ids[0, prompt_len:], skip_special_tokens=True
@@ -510,17 +499,13 @@ def run_experiment(
         # Detect on the assistant axis, correct on the compliance axis
         cross_ids = None
         try:
-            cross_ids, _, _, n_triggered, n_corrected, cross_active, per_layer_events = generate_cross_capped(
+            cross_ids, n_triggered, n_corrected, cross_active, per_layer_events = generate_cross_capped(
                 exp, input_ids, cap_layers,
                 per_layer_detect_axes=assistant_axes,  # "is this a jailbreak?" (gate)
                 correct_axes=compliance_axes,          # "push toward refusal" (correction)
                 detect_thresholds=cross_detect_taus,   # data-driven, NOT the paper's
                 correct_thresholds=compliance_taus,
-                track_layers=track_layers,
-                per_layer_track_axes=assistant_axes,
                 max_new_tokens=max_new_tokens,
-                temperature=TEMPERATURE,
-                do_sample=DO_SAMPLE,
             )
             cross_text = exp.tokenizer.decode(
                 cross_ids[0, prompt_len:], skip_special_tokens=True
@@ -560,7 +545,7 @@ def run_experiment(
         })
 
         # Free GPU memory between prompts to avoid OOM on long runs
-        del bl_ids, bl_scores, bl_projs, cap_ids, cross_ids
+        del bl_ids, cap_ids, cross_ids
         torch.cuda.empty_cache()
 
     return pd.DataFrame(rows)
@@ -788,24 +773,16 @@ def _compute_warmup_state(exp, cfg) -> dict:
     # module-level CAP_LAYERS and silently leaking to other call paths).
     cap_layers = list(original_cap_layers)
     print(f"  Cap layers from original paper: L{cap_layers[0]}-L{cap_layers[-1]}")
-    # Add the final layer for tracking (not capping)
-    final_layer = exp.num_layers - 1
-    if final_layer not in assistant_axes:
-        ax = exp.axis[final_layer].float()
-        assistant_axes[final_layer] = ax / ax.norm()
 
     # Step 2: Build the compliance axis.
-    # WJ train is loaded with n_compliance + n_detect_cal prompts: first slice
-    # builds the compliance axis, next slice is held out for detect-tau
-    # calibration. Both are disjoint from the WJ EVAL split used in the run,
+    # WJ train is loaded with n_compliance prompts for compliance axis
+    # construction. This is disjoint from the WJ EVAL split used in the run,
     # so eval prompts never leak into calibration.
     n_compliance = cfg["N_COMPLIANCE"]
     n_detect_cal = cfg["N_DETECT_CAL"]
     print(f"\nBuilding compliance axis ({n_compliance} prompts per side)...")
     refusing_prompts = load_jbb_behaviors(n_prompts=n_compliance)
-    wj_train_full = load_wildjailbreak_train(n_prompts=n_compliance + n_detect_cal)
-    wj_train = wj_train_full[:n_compliance]
-    wj_detect_cal = wj_train_full[n_compliance:n_compliance + n_detect_cal]
+    wj_train = load_wildjailbreak_train(n_prompts=n_compliance)
 
     if cfg.get("AXIS_METHOD") == "mean_diff":
         compliance_axes, compliance_stats, refusing_acts, compliant_acts = compute_mean_diff_compliance_axis(
@@ -850,11 +827,10 @@ def _compute_warmup_state(exp, cfg) -> dict:
     print(
         f"\nCross-cap detection tau calibration "
         f"(method={cross_detect_method}, "
-        f"benign={len(benign_detect_cal)} calibration prompts, "
-        f"jailbreak={len(wj_detect_cal)} held-out WJ-train)"
+        f"benign={len(benign_detect_cal)} calibration prompts)"
     )
     cross_detect_taus, cross_detect_stats = compute_cross_detect_thresholds(
-        exp, benign_detect_cal, wj_detect_cal,
+        exp, benign_detect_cal,
         assistant_axes, cap_layers,
         method=cross_detect_method,
     )
@@ -862,8 +838,7 @@ def _compute_warmup_state(exp, cfg) -> dict:
     for li in [cap_layers[0], cap_layers[-1]]:
         s = cross_detect_stats[li]
         print(f"  L{li}: paper={assistant_taus[li]:.2f}  new={cross_detect_taus[li]:.2f}  "
-              f"benign={s['mean_benign']:.2f}+/-{s['std_benign']:.2f}  "
-              f"jailbreak={s['mean_jailbreak']:.2f}+/-{s['std_jailbreak']:.2f}")
+              f"benign={s['mean_benign']:.2f}+/-{s['std_benign']:.2f}")
 
     return {
         "cap_layers": cap_layers,                    # authoritative layer list for chunk/merge
@@ -882,7 +857,7 @@ def do_warmup(args, cfg, output_dir):
     print("=== WARMUP: downloading and pre-computing ===\n")
 
     print(f"Loading model: {MODEL_NAME}")
-    exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH, deterministic=DETERMINISTIC)
+    exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH)
     print(f"  Layers: {exp.num_layers}, Hidden dim: {exp.hidden_dim}")
 
     state = _compute_warmup_state(exp, cfg)
@@ -948,7 +923,7 @@ def do_chunk(args, cfg, output_dir):
 
     # Step 2: Load the model (each chunk worker needs its own copy in GPU memory)
     print(f"Loading model: {MODEL_NAME}")
-    exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH, deterministic=DETERMINISTIC)
+    exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH)
 
     # Step 3: Figure out which prompts belong to this chunk
     prompts = build_prompts(cfg)
@@ -1036,7 +1011,7 @@ def do_run(args, cfg, output_dir):
     t_start = time.time()
 
     print(f"\nLoading model: {MODEL_NAME}")
-    exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH, deterministic=DETERMINISTIC)
+    exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH)
     print(f"  Layers: {exp.num_layers}, Hidden dim: {exp.hidden_dim}")
     print(f"  Cap layers (before paper override): L{CAP_LAYERS[0]}-L{CAP_LAYERS[-1]} ({len(CAP_LAYERS)} layers)")
 
@@ -1178,21 +1153,20 @@ def parse_args():
     )
     parser.add_argument(
         "--cross-detect-method", type=str, default="benign-p1",
-        choices=["benign-p1", "benign-p5", "benign-p10", "midpoint"],
+        choices=["benign-p1", "benign-p5", "benign-p10"],
         help="How to place the cross-cap DETECTION threshold on the assistant "
-             "axis, recomputed from your benign + jailbreak calibration prompts. "
+             "axis, recomputed from your benign calibration prompts. "
              "benign-p1 = 1st percentile (<=1%% benign FP; most selective; default). "
              "benign-p5 = 5th percentile (<=5%% benign FP). "
              "benign-p10 = 10th percentile (<=10%% benign FP; most permissive). "
-             "midpoint = (mean_benign + mean_jailbreak) / 2 (symmetric "
-             "discriminative boundary). The paper's assistant_taus are kept "
-             "untouched for Mode 2 (assistant-cap) either way.",
+             "The paper's assistant_taus are kept untouched for Mode 2 "
+             "(assistant-cap) either way.",
     )
     parser.add_argument(
         "--n-detect-cal", type=int, default=None,
         help="Override N_DETECT_CAL from the preset. Number of benign "
-             "CALIBRATION_PROMPTS and held-out WJ-train prompts used for "
-             "cross-detect-tau calibration. Clamped to len(CALIBRATION_PROMPTS).",
+             "CALIBRATION_PROMPTS used for cross-detect-tau calibration. "
+             "Clamped to len(CALIBRATION_PROMPTS).",
     )
     return parser.parse_args()
 

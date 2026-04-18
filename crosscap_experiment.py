@@ -29,11 +29,6 @@ run_crosscap.py is the person using the tools.
       Provides helpers to tokenize prompts and to run a forward pass while
       recording hidden-state activations at every layer.
 
-  _AxisProjectionTracker
-      A read-only hook you attach to a layer. During generation it records
-      how strongly the hidden state points along a given axis at each step.
-      Used for monitoring -- it never changes the model's behavior.
-
   _CappingHook  (single-axis capping)
       The standard safety intervention. At each generation step it checks
       whether the hidden state's projection onto the assistant axis falls
@@ -65,8 +60,7 @@ run_crosscap.py is the person using the tools.
   generate_baseline / generate_capped / generate_cross_capped
       The three generation modes. Each one runs the model's .generate()
       method, optionally with capping hooks installed, and returns the
-      generated text plus diagnostic data (projection traces, which
-      layers fired, how many interventions occurred).
+      generated token IDs plus intervention counts.
 
 === The capping formula ===
 
@@ -337,15 +331,12 @@ class SteeringExperiment:
         model_name: str,                        # HuggingFace model ID, e.g. "Qwen/Qwen3-32B"
         axis_path: Optional[str] = None,         # path to assistant axis .pt file (None = auto-download)
         dtype: torch.dtype = torch.bfloat16,     # half-precision to fit large models in GPU memory
-        deterministic: bool = False,             # if True, disable cuDNN non-determinism
     ):
-        # Lock down randomness if requested (useful for reproducible experiments)
-        if deterministic:
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
+        # Lock down randomness for reproducible experiments
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
         self.model_name = model_name
-        self._deterministic = deterministic
 
         # --- Load the model ---
         # device_map="auto" spreads layers across available GPUs automatically.
@@ -447,57 +438,6 @@ class SteeringExperiment:
             text += "<think>\n</think>\n\n"            # close the thinking block immediately
         tokens = self.tokenizer(text, return_tensors="pt")
         return tokens["input_ids"].to(self._model_device())
-
-
-# ---------------------------------------------------------------------------
-# Projection tracker  (read-only monitoring hook)
-# ---------------------------------------------------------------------------
-#
-# This hook does NOT change the model's behavior. It just watches.
-# At each generation step it records the dot product of the hidden state
-# with a given axis, so we can plot how the model's "stance" evolves
-# token by token.  Used as a context manager:
-#
-#   with _AxisProjectionTracker(layer, axis) as tracker:
-#       model.generate(...)
-#   print(tracker.projections)  # one float per generation step
-# ---------------------------------------------------------------------------
-
-class _AxisProjectionTracker:
-    """Read-only hook that records the dot product of the last-token hidden state
-    with a given axis vector at each forward pass during generation."""
-
-    def __init__(self, layer_module: nn.Module, axis_vector: torch.Tensor):
-        self._layer = layer_module           # which transformer layer to watch
-        self._axis = axis_vector.float()     # the direction to measure against
-        # Projection math assumes a unit vector: cos(h, v) = h @ v only when |v|=1.
-        _assert_unit_norm(self._axis, "projection tracker axis")
-        self._axis_device = None             # lazily moved to GPU on first call
-        self._projections: list = []         # one entry per generation step
-        self._handle = None                  # PyTorch hook handle (for cleanup)
-
-    def __enter__(self):
-        def hook_fn(module, input, output):
-            act = output[0] if isinstance(output, tuple) else output
-            h = act[0, -1, :].detach().float()               # last-token hidden state
-            if self._axis_device is None:                     # first call: move axis to same GPU
-                self._axis_device = self._axis.to(h.device)
-            self._projections.append(h @ self._axis_device)   # dot product = projection
-
-        self._handle = self._layer.register_forward_hook(hook_fn)
-        return self
-
-    def __exit__(self, *exc):
-        if self._handle is not None:
-            self._handle.remove()            # detach hook so it doesn't fire anymore
-            self._handle = None
-
-    @property
-    def projections(self) -> list[float]:
-        """Return all recorded projections as a plain Python list of floats."""
-        if not self._projections:
-            return []
-        return torch.stack(self._projections).cpu().tolist()
 
 
 # ---------------------------------------------------------------------------
@@ -690,27 +630,25 @@ class _CrossAxisCappingHook:
 # Before cross-cap can fire, we need to know *when* to fire. The idea:
 #   1. Run a batch of benign prompts and record their assistant-axis
 #      projections at the last token position.
-#   2. Pick a cutoff on the benign distribution (default: 5th percentile)
-#      as the detection tau. By construction, <=5% of benign prompts trip
+#   2. Pick a cutoff on the benign distribution (default: 1st percentile)
+#      as the detection tau. By construction, <=1% of benign prompts trip
 #      the gate.
 #
-# Jailbreak prompts are run too, but only for diagnostic stats (means,
-# separation) -- the threshold itself is defined purely on the benign side
-# so it's calibrated to "how aggressive are we willing to be on benign
-# traffic" rather than to any particular jailbreak distribution.
+# The threshold is defined purely on the benign side so it's calibrated to
+# "how aggressive are we willing to be on benign traffic" rather than to
+# any particular jailbreak distribution.
 # ---------------------------------------------------------------------------
 
 def compute_cross_detect_thresholds(
     exp: "SteeringExperiment",
     benign_prompts: list[str],
-    jailbreak_prompts: list[str],
     assistant_axes: dict[int, torch.Tensor],
     cap_layers: list[int],
-    method: str = "benign-p5",
+    method: str = "benign-p1",
 ) -> tuple[dict[int, float], dict[int, dict[str, float]]]:
     """Per-layer detection thresholds for the cross-cap gate, computed from
-    your own benign + jailbreak calibration prompts projected onto the
-    (paper's) assistant axis.
+    your own benign calibration prompts projected onto the (paper's)
+    assistant axis.
 
     The assistant axis vector is unchanged -- only the scalar cutoff used by
     the cross-cap detection gate is recomputed, so the gate fires on prompts
@@ -724,63 +662,47 @@ def compute_cross_detect_thresholds(
 
     Methods (all data-driven on YOUR prompts):
       - "benign-p1":  tau = 1st percentile of benign projections
-                      (<=1% benign FP; most selective gate)
+                      (<=1% benign FP; most selective gate; default)
       - "benign-p5":  tau = 5th percentile of benign projections
-                      (<=5% benign FP by construction; default)
+                      (<=5% benign FP by construction)
       - "benign-p10": 10th percentile of benign projections
                       (<=10% benign FP; most permissive gate)
-      - "midpoint":   tau = (mean_benign + mean_jailbreak) / 2
-                      (symmetric discriminative boundary)
 
     Returns:
         taus:  {layer_idx -> tau (float)}
         stats: {layer_idx -> {
             "mean_benign", "std_benign",
-            "mean_jailbreak", "std_jailbreak",
-            "p1_benign", "p5_benign", "p10_benign", "midpoint", "separation",
+            "p1_benign", "p5_benign", "p10_benign",
         }}
     """
     logger.info(
         "Computing cross-cap detection thresholds on assistant axis at "
-        "L%d-L%d (%d benign, %d jailbreak, method=%s)...",
-        cap_layers[0], cap_layers[-1],
-        len(benign_prompts), len(jailbreak_prompts), method,
+        "L%d-L%d (%d benign, method=%s)...",
+        cap_layers[0], cap_layers[-1], len(benign_prompts), method,
     )
 
-    def last_token_projs(prompts: list[str], label: str) -> dict[int, list[float]]:
-        projs = {li: [] for li in cap_layers}
-        for prompt in tqdm(prompts, desc=f"  detect-cal {label}", leave=False):
-            ids = exp.tokenize(prompt)
-            hs, _ = exp.get_baseline_trajectory(ids)
-            for li in cap_layers:
-                h_last = hs[li].float()
-                v = assistant_axes[li].float().to(h_last.device)
-                projs[li].append((h_last @ v).item())
-        return projs
-
-    benign_projs = last_token_projs(benign_prompts, "benign")
-    jb_projs     = last_token_projs(jailbreak_prompts, "jailbreak")
+    benign_projs: dict[int, list[float]] = {li: [] for li in cap_layers}
+    for prompt in tqdm(benign_prompts, desc="  detect-cal benign", leave=False):
+        ids = exp.tokenize(prompt)
+        hs, _ = exp.get_baseline_trajectory(ids)
+        for li in cap_layers:
+            h_last = hs[li].float()
+            v = assistant_axes[li].float().to(h_last.device)
+            benign_projs[li].append((h_last @ v).item())
 
     taus: dict[int, float] = {}
     stats: dict[int, dict[str, float]] = {}
     for li in cap_layers:
         b = np.asarray(benign_projs[li], dtype=np.float32)
-        j = np.asarray(jb_projs[li],     dtype=np.float32)
-        mean_b, mean_j = float(b.mean()), float(j.mean())
         p1_b  = float(np.percentile(b,  1))
         p5_b  = float(np.percentile(b,  5))
         p10_b = float(np.percentile(b, 10))
-        midpoint = (mean_b + mean_j) / 2.0
         stats[li] = {
-            "mean_benign":    mean_b,
-            "std_benign":     float(b.std()),
-            "mean_jailbreak": mean_j,
-            "std_jailbreak":  float(j.std()),
-            "p1_benign":      p1_b,
-            "p5_benign":      p5_b,
-            "p10_benign":     p10_b,
-            "midpoint":       midpoint,
-            "separation":     mean_b - mean_j,
+            "mean_benign": float(b.mean()),
+            "std_benign":  float(b.std()),
+            "p1_benign":   p1_b,
+            "p5_benign":   p5_b,
+            "p10_benign":  p10_b,
         }
         if method == "benign-p1":
             taus[li] = p1_b
@@ -788,22 +710,17 @@ def compute_cross_detect_thresholds(
             taus[li] = p5_b
         elif method == "benign-p10":
             taus[li] = p10_b
-        elif method == "midpoint":
-            taus[li] = midpoint
         else:
             raise ValueError(
                 f"Unknown cross-detect method: {method!r} "
-                "(expected benign-p1, benign-p5, benign-p10, or midpoint)"
+                "(expected benign-p1, benign-p5, or benign-p10)"
             )
 
     for li in [cap_layers[0], cap_layers[-1]]:
         s = stats[li]
         logger.info(
-            "  detect-tau L%d: tau=%.2f  benign=%.2f+/-%.2f  jailbreak=%.2f+/-%.2f  sep=%.2f",
-            li, taus[li],
-            s["mean_benign"], s["std_benign"],
-            s["mean_jailbreak"], s["std_jailbreak"],
-            s["separation"],
+            "  detect-tau L%d: tau=%.2f  benign=%.2f+/-%.2f",
+            li, taus[li], s["mean_benign"], s["std_benign"],
         )
 
     return taus, stats
@@ -1072,65 +989,22 @@ def orthogonalize_compliance_axes(
 def generate_baseline(
     exp: SteeringExperiment,
     input_ids: torch.Tensor,
-    axis_directions: dict[str, dict[int, torch.Tensor]],   # axes to monitor (not used for capping)
-    track_layers: list[int],                     # which layers to record projections at
     max_new_tokens: int = 128,
-    temperature: float = 1.0,
-    do_sample: bool = False,                     # False = greedy decoding (deterministic)
-) -> tuple:
-
-
+) -> torch.Tensor:
     """Generate text with NO capping -- this is the control condition.
 
-    We still attach projection trackers so we can compare how the model's
-    internal state differs between capped and uncapped runs.
-
-    Args:
-        axis_directions: maps axis_name -> layer_idx -> unit vector for that layer.
-
     Returns:
-        sequences:  the generated token IDs
-        scores:     per-step logit distributions
-        projs:      projs[axis_name][layer_idx] = list of projection values,
-                    one per generation step
+        sequences: the generated token IDs (shape: [1, prompt_len + new_tokens])
     """
-
-
-    with ExitStack() as stack:
-        # Attach read-only trackers to monitor projections (no intervention)
-        trackers: dict[tuple, _AxisProjectionTracker] = {}
-        for axis_name, per_layer in axis_directions.items():
-            for layer_idx in track_layers:
-                t = _AxisProjectionTracker(exp.layers[layer_idx], per_layer[layer_idx])
-                stack.enter_context(t)
-                trackers[(axis_name, layer_idx)] = t
-
-        # Standard generation setup
-        attention_mask = torch.ones_like(input_ids)
-        gen_kwargs = dict(
+    attention_mask = torch.ones_like(input_ids)
+    with torch.inference_mode():
+        sequences = exp.model.generate(
+            input_ids,
             attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
-            do_sample=do_sample,
-            output_scores=True,              # we want the raw logits at each step
-            return_dict_in_generate=True,    # return a structured object, not just token IDs
+            do_sample=False,
         )
-        if do_sample:
-            gen_kwargs.update(temperature=temperature)
-
-        # Actually generate -- hooks fire automatically at each step
-        with torch.inference_mode():
-            output = exp.model.generate(input_ids, **gen_kwargs)
-
-        # Collect all recorded projections into a nested dict
-        projs = {
-            axis_name: {
-                layer_idx: trackers[(axis_name, layer_idx)].projections
-                for layer_idx in track_layers
-            }
-            for axis_name in axis_directions
-        }
-
-    return output.sequences, output.scores, projs
+    return sequences
 
 
 def generate_capped(
@@ -1139,13 +1013,8 @@ def generate_capped(
     cap_layers: list[int],                       # which layers to apply capping at
     per_layer_axes: dict[int, torch.Tensor],     # per-layer assistant axis vectors
     per_layer_thresholds: dict[int, float],       # threshold per layer
-    track_layers: list[int],                     # which layers to track projections at
     max_new_tokens: int = 128,
-    temperature: float = 1.0,
-    do_sample: bool = False,
-) -> tuple:
-
-
+) -> tuple[torch.Tensor, int, list[int]]:
     """Generate text with SINGLE-AXIS capping active.
 
     This is the baseline capping method: at each generation step, every
@@ -1155,52 +1024,30 @@ def generate_capped(
 
     Returns:
         sequences:        generated token IDs
-        scores:           per-step logit distributions
-        projs:            projection traces per layer
         n_interventions:  total number of times any layer fired
         active_layers:    list of layer indices that fired at least once
     """
-
-
-
-    # Create one capping hook per cap layer, each with its own axis and threshold
     cap_hooks = [
         _CappingHook(exp.layers[layer_idx], per_layer_axes[layer_idx], per_layer_thresholds[layer_idx])
         for layer_idx in cap_layers
     ]
 
     with ExitStack() as stack:
-        # Activate all capping hooks
         for hook in cap_hooks:
             stack.enter_context(hook)
 
-        # Also attach read-only trackers so we can see the post-cap projections
-        trackers: dict[int, _AxisProjectionTracker] = {}
-        for layer_idx in track_layers:
-            t = _AxisProjectionTracker(exp.layers[layer_idx], per_layer_axes[layer_idx])
-            stack.enter_context(t)
-            trackers[layer_idx] = t
-
-        # Generate
         attention_mask = torch.ones_like(input_ids)
-        gen_kwargs = dict(
-            attention_mask=attention_mask,
-            max_new_tokens=max_new_tokens,
-            do_sample=do_sample,
-            output_scores=True,
-            return_dict_in_generate=True,
-        )
-        if do_sample:
-            gen_kwargs.update(temperature=temperature)
         with torch.inference_mode():
-            output = exp.model.generate(input_ids, **gen_kwargs)
+            sequences = exp.model.generate(
+                input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+            )
 
-        projs = {layer_idx: trackers[layer_idx].projections for layer_idx in track_layers}
-
-    # Summarise what happened: how many interventions, and at which layers?
     n_interventions = sum(h.n_interventions for h in cap_hooks)
     active_layers = [li for li, h in zip(cap_layers, cap_hooks) if h.n_interventions > 0]
-    return output.sequences, output.scores, projs, n_interventions, active_layers
+    return sequences, n_interventions, active_layers
 
 
 def generate_cross_capped(
@@ -1211,14 +1058,8 @@ def generate_cross_capped(
     correct_axes: dict[int, torch.Tensor],       # per-layer compliance axes for correction
     detect_thresholds: dict[int, float],          # per-layer thresholds for detection
     correct_thresholds: dict[int, float],         # per-layer thresholds for correction
-    track_layers: list[int],
-    per_layer_track_axes: dict[int, torch.Tensor],   # per-layer axes for monitoring
     max_new_tokens: int = 128,
-    temperature: float = 1.0,
-    do_sample: bool = False,
-) -> tuple:
-
-
+) -> tuple[torch.Tensor, int, int, list[int], dict[int, list[tuple[int, float]]]]:
     """Generate text with CROSS-AXIS capping: detect on one axis, correct on another.
 
     This is the novel method. At each generation step and each cap layer:
@@ -1231,8 +1072,6 @@ def generate_cross_capped(
 
     Returns:
         sequences:        generated token IDs
-        scores:           per-step logit distributions
-        projs:            projection traces per layer
         n_triggered:      how many times the detection gate opened
         n_corrected:      how many times correction was actually applied
         corrected_layers: which layers applied at least one correction
@@ -1243,12 +1082,8 @@ def generate_cross_capped(
                           producing logits for the (k+1)-th. Magnitude is the
                           L2 distance h was shoved by that firing. Decoding
                           the token at each step is the caller's job (needs
-                          prompt_len + output.sequences).
+                          prompt_len + sequences).
     """
-
-
-
-    # Create one cross-axis hook per cap layer
     hooks = [
         _CrossAxisCappingHook(
             exp.layers[layer_idx],
@@ -1259,43 +1094,24 @@ def generate_cross_capped(
     ]
 
     with ExitStack() as stack:
-        # Activate all cross-axis hooks
         for hook in hooks:
             stack.enter_context(hook)
 
-        # Attach trackers for monitoring
-        trackers: dict[int, _AxisProjectionTracker] = {}
-        for layer_idx in track_layers:
-            t = _AxisProjectionTracker(exp.layers[layer_idx], per_layer_track_axes[layer_idx])
-            stack.enter_context(t)
-            trackers[layer_idx] = t
-
-        # Generate
         attention_mask = torch.ones_like(input_ids)
-        gen_kwargs = dict(
-            attention_mask=attention_mask,
-            max_new_tokens=max_new_tokens,
-            do_sample=do_sample,
-            output_scores=True,
-            return_dict_in_generate=True,
-        )
-        if do_sample:
-            gen_kwargs.update(temperature=temperature)
         with torch.inference_mode():
-            output = exp.model.generate(input_ids, **gen_kwargs)
+            sequences = exp.model.generate(
+                input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+            )
 
-        projs = {layer_idx: trackers[layer_idx].projections for layer_idx in track_layers}
-
-    # Summarise: triggered = detection fired, corrected = correction actually applied
-    # (triggered >= corrected, because detection can fire without correction being needed)
     n_triggered = sum(h.n_triggered for h in hooks)
     n_corrected = sum(h.n_corrected for h in hooks)
     corrected_layers = [li for li, h in zip(cap_layers, hooks) if h.n_corrected > 0]
-    # Per-layer firing events: (step_index, magnitude) per firing. Only layers
-    # that fired are included; step order within each layer is preserved.
     per_layer_events = {
         li: list(h.correction_events)
         for li, h in zip(cap_layers, hooks)
         if h.n_corrected > 0
     }
-    return output.sequences, output.scores, projs, n_triggered, n_corrected, corrected_layers, per_layer_events
+    return sequences, n_triggered, n_corrected, corrected_layers, per_layer_events
