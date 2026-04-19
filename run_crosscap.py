@@ -594,6 +594,8 @@ def _compliance_tau(stats: dict, method: str) -> float:
         # Strictly higher floor than optimal (alpha=0.5); stays within the
         # clamp mechanism -- just a stricter threshold, no active push.
         return stats["mean_compliant"] + 0.75 * (stats["mean_refusing"] - stats["mean_compliant"])
+    elif method == "optimal20":
+        return stats["mean_compliant"] + 0.20 * (stats["mean_refusing"] - stats["mean_compliant"])
     elif method == "mean":
         return stats["mean_compliant"]
     elif method == "p25":
@@ -1134,11 +1136,12 @@ def parse_args():
     )
     parser.add_argument(
         "--compliance-threshold", type=str, default="optimal75",
-        choices=["mean+std", "optimal", "optimal75", "mean", "p25"],
+        choices=["mean+std", "optimal", "optimal75", "optimal20", "mean", "p25"],
         help="Compliance axis threshold method: "
              "optimal75 = alpha=0.75, 3/4 of the way from mean_compliant toward "
              "mean_refusing; stricter floor than optimal (default). "
              "optimal = midpoint (alpha=0.5) between compliant and refusing means. "
+             "optimal20 = alpha=0.20, closer to mean_compliant; less aggressive, fires less often. "
              "mean+std = mean_compliant + std_compliant. "
              "mean = mean_compliant. "
              "p25 = 25th percentile of pooled refusing+compliant projections.",
