@@ -1120,6 +1120,13 @@ def do_run(args, cfg, output_dir):
 
     state = _compute_warmup_state(exp, cfg)
 
+    # Persist warmup state so diagnose_axes.py can read the per-layer
+    # diagnostic fields. Matches do_warmup's behaviour on the parallel path.
+    output_dir.mkdir(parents=True, exist_ok=True)
+    warmup_path = output_dir / WARMUP_FILE
+    torch.save(state, warmup_path)
+    print(f"Warmup state saved to {warmup_path}")
+
     cross_only = cfg.get("CROSS_ONLY", False)
     prompts = build_prompts(cfg)
 
