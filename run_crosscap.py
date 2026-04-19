@@ -446,13 +446,17 @@ def run_experiment(
     cross_detect_taus: dict[int, float], # data-driven tau -- used by Mode 3 detect gate
     max_new_tokens: int,                 # max tokens to generate per prompt
     cross_only: bool = False,            # if True, skip assistant-axis capping
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, list[dict]]:
     """Run baseline + assistant-cap + cross-cap for each prompt.
 
-    Returns a DataFrame with one row per prompt containing the generated
-    text from each mode, plus which layers fired and whether capping was applied.
+    Returns:
+        df:     one row per prompt with generated text, fire counts, push trace JSON.
+        traces: one dict per prompt with the full per-token per-layer trace
+                (signal 1+2 diagnostic data). Keys: prompt_idx, prompt_type,
+                per_layer_trace (dict[layer_idx, list[step-record]]).
     """
     rows = []
+    traces: list[dict] = []
 
     for i, prompt in enumerate(prompts):
         prompt_text = prompt["text"]
@@ -499,7 +503,7 @@ def run_experiment(
         # Detect on the assistant axis, correct on the compliance axis
         cross_ids = None
         try:
-            cross_ids, n_triggered, n_corrected, cross_active, per_layer_events = generate_cross_capped(
+            cross_ids, n_triggered, n_corrected, cross_active, per_layer_events, per_layer_trace = generate_cross_capped(
                 exp, input_ids, cap_layers,
                 per_layer_detect_axes=assistant_axes,  # "is this a jailbreak?" (gate)
                 correct_axes=compliance_axes,          # "push toward refusal" (correction)
@@ -517,6 +521,7 @@ def run_experiment(
             cross_active = []
             cross_text = "NA"
             per_layer_events = {}
+            per_layer_trace = {}
 
         # --- Collect results for this prompt into one row ---
         rows.append({
@@ -544,11 +549,18 @@ def run_experiment(
             ) if cross_ids is not None else "",
         })
 
+        traces.append({
+            "prompt_idx":  prompt["idx"],
+            "prompt_type": prompt["type"],
+            "prompt_len":  prompt_len,
+            "per_layer_trace": per_layer_trace,
+        })
+
         # Free GPU memory between prompts to avoid OOM on long runs
         del bl_ids, cap_ids, cross_ids
         torch.cuda.empty_cache()
 
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows), traces
 
 
 # ============================================================
@@ -808,8 +820,50 @@ def _compute_warmup_state(exp, cfg) -> dict:
             refusing_acts, compliant_acts, cap_layers,
         )
 
-    cos_val = (compliance_axes[cap_layers[-1]] @ assistant_axes[cap_layers[-1]]).item()
+    # Signal 4: cos(compliance, assistant) at every cap layer, not just the
+    # last. Tells us whether the unsupervised PCA axis agrees with the
+    # paper's supervised axis layer-by-layer.
+    per_layer_cos_compliance_assistant = {
+        li: float((compliance_axes[li] @ assistant_axes[li]).item())
+        for li in cap_layers
+    }
+    cos_val = per_layer_cos_compliance_assistant[cap_layers[-1]]  # preserved key for metadata
     print(f"  cos(assistant, compliance) at L{cap_layers[-1]}: {cos_val:.4f}")
+
+    # Signal 5: cos(compliance_L, compliance_{L+1}) for adjacent cap layers.
+    # Tests axis stability across depth.
+    adjacent_layer_cos_compliance = {
+        cap_layers[i]: float(
+            (compliance_axes[cap_layers[i]] @ compliance_axes[cap_layers[i + 1]]).item()
+        )
+        for i in range(len(cap_layers) - 1)
+    }
+
+    # Signal 6: per-prompt L2 norms on each calibration set at every cap layer.
+    # Keeps magnitude decoupled from direction for post-hoc analysis.
+    per_prompt_norms_refusing = {
+        li: [float(a.norm().item()) for a in refusing_acts[li]]
+        for li in cap_layers
+    }
+    per_prompt_norms_compliant = {
+        li: [float(a.norm().item()) for a in compliant_acts[li]]
+        for li in cap_layers
+    }
+
+    # Projections of calibration activations onto the assistant axis, per
+    # layer, for both classes. Pairs with the compliance-axis projections
+    # already in compliance_stats (signal 3). Together these let us see
+    # how each calibration prompt sits on each reference direction.
+    per_prompt_projections_assistant_refusing = {}
+    per_prompt_projections_assistant_compliant = {}
+    for li in cap_layers:
+        a_axis = assistant_axes[li].float()
+        per_prompt_projections_assistant_refusing[li] = [
+            float((a.float() @ a_axis).item()) for a in refusing_acts[li]
+        ]
+        per_prompt_projections_assistant_compliant[li] = [
+            float((a.float() @ a_axis).item()) for a in compliant_acts[li]
+        ]
 
     # Step 3: Compliance thresholds from the stats already computed with the axis.
     threshold_method = cfg["COMPLIANCE_THRESHOLD"]
@@ -817,12 +871,20 @@ def _compute_warmup_state(exp, cfg) -> dict:
         li: _compliance_tau(compliance_stats[li], threshold_method)
         for li in cap_layers
     }
-    print(f"\nCompliance thresholds ({threshold_method}):")
-    for li in [cap_layers[0], cap_layers[-1]]:
+    print(f"\nCompliance thresholds ({threshold_method}), per layer:")
+    for li in cap_layers:
         s = compliance_stats[li]
-        print(f"  L{li}: tau={compliance_taus[li]:.1f}  "
-              f"refusing={s['mean_refusing']:.1f}+/-{s['std_refusing']:.1f}  "
-              f"compliant={s['mean_compliant']:.1f}+/-{s['std_compliant']:.1f}")
+        print(
+            f"  L{li}: tau={compliance_taus[li]:.2f}  "
+            f"refusing={s['mean_refusing']:.1f}+/-{s['std_refusing']:.1f}  "
+            f"compliant={s['mean_compliant']:.1f}+/-{s['std_compliant']:.1f}  "
+            f"sep={s['separation']:.1f}  "
+            f"cos(assist,comp)={per_layer_cos_compliance_assistant[li]:+.3f}"
+        )
+    print("\nAdjacent-layer compliance-axis cosines:")
+    for li_from, cos_adj in adjacent_layer_cos_compliance.items():
+        li_to = cap_layers[cap_layers.index(li_from) + 1]
+        print(f"  cos(L{li_from}, L{li_to}) = {cos_adj:+.3f}")
 
     # Step 4: Cross-cap detection tau (assistant axis vector unchanged;
     # paper's assistant_taus stay in use for Mode 2).
@@ -838,8 +900,8 @@ def _compute_warmup_state(exp, cfg) -> dict:
         assistant_axes, cap_layers,
         method=cross_detect_method,
     )
-    print("Cross-cap detection thresholds (paper tau -> new tau):")
-    for li in [cap_layers[0], cap_layers[-1]]:
+    print("Cross-cap detection thresholds (paper tau -> new tau), per layer:")
+    for li in cap_layers:
         s = cross_detect_stats[li]
         print(f"  L{li}: paper={assistant_taus[li]:.2f}  new={cross_detect_taus[li]:.2f}  "
               f"benign={s['mean_benign']:.2f}+/-{s['std_benign']:.2f}")
@@ -852,7 +914,29 @@ def _compute_warmup_state(exp, cfg) -> dict:
         "compliance_taus": compliance_taus,
         "cross_detect_taus": cross_detect_taus,      # data-driven, used by Mode 3 detect gate
         "cross_detect_stats": cross_detect_stats,
-        "cos_similarity": cos_val,
+        "cos_similarity": cos_val,                   # legacy scalar (last-layer cos)
+
+        # --- Diagnostic logging (signals 3-6 of the exploratory plan) ---
+        # compliance_stats is per-layer dict with summary stats AND full per-prompt
+        # projection lists (see _projection_stats). Previously discarded after tau
+        # selection; now persisted so post-hoc analysis can inspect distribution
+        # shape, bimodality, outliers that mean/std hide.
+        "compliance_stats": compliance_stats,
+
+        # Per-layer cos dicts. The scalar cos_similarity above is just
+        # per_layer_cos_compliance_assistant[cap_layers[-1]].
+        "per_layer_cos_compliance_assistant": per_layer_cos_compliance_assistant,
+        "adjacent_layer_cos_compliance":      adjacent_layer_cos_compliance,
+
+        # Per-prompt L2 norms on the calibration sets, per layer. Separates
+        # magnitude from direction as confounds for projection-based thresholds.
+        "per_prompt_norms_refusing":   per_prompt_norms_refusing,
+        "per_prompt_norms_compliant":  per_prompt_norms_compliant,
+
+        # Projections on the assistant axis for each calibration prompt, per
+        # layer. Compliance-axis projections are already in compliance_stats.
+        "per_prompt_projections_assistant_refusing":  per_prompt_projections_assistant_refusing,
+        "per_prompt_projections_assistant_compliant": per_prompt_projections_assistant_compliant,
     }
 
 
@@ -940,7 +1024,7 @@ def do_chunk(args, cfg, output_dir):
 
     # Step 4: Run the experiment on this chunk's prompts
     cross_only = cfg.get("CROSS_ONLY", False)
-    df = run_experiment(
+    df, traces = run_experiment(
         exp, chunk_prompts, cap_layers,
         assistant_axes, compliance_axes,
         assistant_taus, compliance_taus, cross_detect_taus,
@@ -948,11 +1032,13 @@ def do_chunk(args, cfg, output_dir):
         cross_only=cross_only,
     )
 
-    # Step 5: Save this chunk's results as a CSV
+    # Step 5: Save this chunk's results as a CSV + per-token trace pickle
     chunk_dir = output_dir / "chunks"
     chunk_dir.mkdir(parents=True, exist_ok=True)
     chunk_path = chunk_dir / f"chunk_{chunk_idx}.csv"
     df.to_csv(chunk_path, index=False)
+    trace_path = chunk_dir / f"trace_{chunk_idx}.pt"
+    torch.save(traces, trace_path)
 
     elapsed = time.time() - t_start
     print(f"\nChunk {chunk_idx} done in {elapsed / 60:.1f} min. Saved to {chunk_path}")
@@ -1000,6 +1086,19 @@ def do_merge(args, cfg, output_dir):
     cross_only = cfg.get("CROSS_ONLY", False)
     save_results(df, output_dir, args, cos_val, cfg, elapsed=0, cap_layers=cap_layers, cross_only=cross_only)
 
+    # Merge per-chunk diagnostic traces into a single gen_trace.pt
+    trace_files = sorted(
+        chunk_dir.glob("trace_*.pt"),
+        key=lambda p: int(p.stem.split("_")[1]),
+    )
+    if trace_files:
+        merged_traces: list[dict] = []
+        for tf in trace_files:
+            merged_traces.extend(torch.load(tf, map_location="cpu", weights_only=False))
+        out_trace = output_dir / "gen_trace.pt"
+        torch.save(merged_traces, out_trace)
+        print(f"  Merged {len(trace_files)} trace files -> {out_trace}")
+
 
 # ============================================================
 # SINGLE-PROCESS (no parallelism -- simplest way to run)
@@ -1025,7 +1124,7 @@ def do_run(args, cfg, output_dir):
     prompts = build_prompts(cfg)
 
     print(f"\nRunning experiment on {len(prompts)} prompts...")
-    df = run_experiment(
+    df, traces = run_experiment(
         exp, prompts, state["cap_layers"],
         state["assistant_axes"], state["compliance_axes"],
         state["assistant_taus"], state["compliance_taus"], state["cross_detect_taus"],
@@ -1038,6 +1137,11 @@ def do_run(args, cfg, output_dir):
         df, output_dir, args, state["cos_similarity"], cfg, elapsed,
         cap_layers=state["cap_layers"], cross_only=cross_only,
     )
+
+    # Save per-token diagnostic trace alongside the CSV outputs.
+    trace_path = output_dir / "gen_trace.pt"
+    torch.save(traces, trace_path)
+    print(f"Per-token trace saved to {trace_path}")
 
 
 # ============================================================

@@ -522,6 +522,38 @@ class _CappingHook:
             self._handle = None
 
 
+class _TraceCoordinator:
+    """Shared state across _CrossAxisCappingHooks in the same generation run.
+
+    When layer L fires at step k, it registers (k, L, correction_axis, tau)
+    here. Downstream cap layers (L' > L) at the same step k look up those
+    fires and project their input activation onto L's correction axis. If
+    the projection is still near tau, the clamp applied at L survived the
+    intervening residual/attention ops; if it drifted far above tau, the
+    model routed around the clamp. This is the signal-2 measurement in the
+    diagnostic logging plan.
+
+    State grows with fire count (bounded and small at sanity scale). Not
+    cleaned up between steps -- cheap to leave around.
+    """
+
+    def __init__(self) -> None:
+        # step_idx -> list of (source_layer_idx, correction_axis_cpu, tau_correct)
+        self._fires: dict[int, list[tuple[int, torch.Tensor, float]]] = {}
+
+    def record_fire(
+        self,
+        step: int,
+        layer_idx: int,
+        axis_cpu: torch.Tensor,
+        tau_correct: float,
+    ) -> None:
+        self._fires.setdefault(step, []).append((layer_idx, axis_cpu, tau_correct))
+
+    def fires_at_step(self, step: int) -> list[tuple[int, torch.Tensor, float]]:
+        return self._fires.get(step, [])
+
+
 class _CrossAxisCappingHook:
     """Cross-axis capping: detect on one axis, correct along a DIFFERENT axis.
 
@@ -547,12 +579,15 @@ class _CrossAxisCappingHook:
     def __init__(
         self,
         layer_module: nn.Module,
+        layer_idx: int,                  # cap layer index (for trace + coordinator keying)
         detect_axis: torch.Tensor,       # axis used to decide IF we should intervene
         detect_threshold: float,         # fire when projection falls below this
         correct_axis: torch.Tensor,      # axis used to perform the actual correction
         correct_threshold: float,        # target projection value on the correction axis
+        trace_coordinator: Optional["_TraceCoordinator"] = None,
     ):
         self._layer = layer_module
+        self._layer_idx = layer_idx
         self._detect_axis = detect_axis.float()
         self._tau_detect = detect_threshold
         self._correct_axis = correct_axis.float()
@@ -570,6 +605,12 @@ class _CrossAxisCappingHook:
         # magnitude equals |delta| = (tau_correct - correct_proj), i.e. how far
         # h was shoved along the unit-norm correction axis at that firing.
         self.correction_events: list[tuple[int, float]] = []
+        # Per-forward-pass diagnostic trace -- one dict per step. Populated
+        # whether or not the cap fired, so trajectory dynamics are visible.
+        # Keys: step, detect_proj, correct_proj, norm, fired, push_applied,
+        # proj_onto_prev_axes (list of {src_layer, proj, src_tau} — signal 2).
+        self.trace: list[dict] = []
+        self._coordinator = trace_coordinator
         self._step_counter = 0
         self._handle = None
 
@@ -588,22 +629,62 @@ class _CrossAxisCappingHook:
                 self._detect_device = self._detect_axis.to(h.device)
                 self._correct_device = self._correct_axis.to(h.device)
 
+            # Always measure both projections + norm, so the trace captures
+            # the full per-step trajectory, not just fire events.
+            detect_proj = (h_last @ self._detect_device).item()
+            correct_proj = (h_last @ self._correct_device).item()
+            h_norm = h_last.norm().item()
+
+            # Signal 2: project the current layer's input activation onto
+            # each earlier cap layer that fired at this step. Tests whether
+            # the clamp applied upstream persisted into this layer.
+            proj_onto_prev_axes: list[dict] = []
+            if self._coordinator is not None:
+                for src_li, src_axis_cpu, src_tau in self._coordinator.fires_at_step(self._step_counter):
+                    if src_li == self._layer_idx:
+                        continue  # own fire -- post-clamp == tau trivially
+                    src_axis_dev = src_axis_cpu.to(h.device)
+                    proj_on_src = (h_last @ src_axis_dev).item()
+                    proj_onto_prev_axes.append({
+                        "src_layer": src_li,
+                        "proj": proj_on_src,
+                        "src_tau": src_tau,
+                    })
+
             # --- GATE 1: Detection ---
             # Check the assistant axis: is the model heading toward compliance?
-            detect_proj = (h_last @ self._detect_device).item()
+            fired = False
+            push_applied = 0.0
             if detect_proj < self._tau_detect:
                 self.n_triggered += 1        # yes, detection fired
 
                 # --- GATE 2: Correction ---
                 # Now check the *correction* axis: does h also need nudging there?
-                correct_proj = (h_last @ self._correct_device).item()
                 if correct_proj < self._tau_correct:
                     # Push h along the correction axis to reach the threshold
-                    push = self._tau_correct - correct_proj
-                    delta = push * self._correct_device.to(h.dtype)
+                    push_applied = self._tau_correct - correct_proj
+                    delta = push_applied * self._correct_device.to(h.dtype)
                     h[0, -1, :].add_(delta)  # in-place modification
                     self.n_corrected += 1
-                    self.correction_events.append((self._step_counter, push))
+                    self.correction_events.append((self._step_counter, push_applied))
+                    fired = True
+                    if self._coordinator is not None:
+                        self._coordinator.record_fire(
+                            self._step_counter,
+                            self._layer_idx,
+                            self._correct_axis,  # CPU tensor, coordinator will move per use
+                            self._tau_correct,
+                        )
+
+            self.trace.append({
+                "step":                 self._step_counter,
+                "detect_proj":          detect_proj,
+                "correct_proj":         correct_proj,
+                "norm":                 h_norm,
+                "fired":                fired,
+                "push_applied":         push_applied,
+                "proj_onto_prev_axes":  proj_onto_prev_axes,
+            })
 
             # Advance the step counter whether or not the gates opened, so the
             # step index always reflects the forward-pass ordering.
@@ -769,7 +850,13 @@ def _projection_stats(
     """Project the two activation stacks onto an axis and compute the summary
     stats used for threshold selection and logging. Shared between PCA,
     mean-diff, and orthogonalized axis paths so their stats dicts stay in
-    lockstep."""
+    lockstep.
+
+    `refusing_projs` and `compliant_projs` in the returned dict are the raw
+    per-prompt projection scalars (list[float]). They're otherwise discarded
+    after summary stats are computed; keeping them lets the diagnostic dump
+    reconstruct distribution shape (bimodality, outliers) that mean/std hide.
+    """
     refusing_projs = (refusing_stack @ axis).numpy()
     compliant_projs = (compliant_stack @ axis).numpy()
     mean_r = float(refusing_projs.mean())
@@ -786,6 +873,8 @@ def _projection_stats(
         "mean+std":       mean_c + std_c,
         "p25":            p25,
         "separation":     mean_r - mean_c,
+        "refusing_projs":  refusing_projs.tolist(),
+        "compliant_projs": compliant_projs.tolist(),
     }
 
 
@@ -1059,7 +1148,11 @@ def generate_cross_capped(
     detect_thresholds: dict[int, float],          # per-layer thresholds for detection
     correct_thresholds: dict[int, float],         # per-layer thresholds for correction
     max_new_tokens: int = 128,
-) -> tuple[torch.Tensor, int, int, list[int], dict[int, list[tuple[int, float]]]]:
+) -> tuple[
+    torch.Tensor, int, int, list[int],
+    dict[int, list[tuple[int, float]]],
+    dict[int, list[dict]],
+]:
     """Generate text with CROSS-AXIS capping: detect on one axis, correct on another.
 
     This is the novel method. At each generation step and each cap layer:
@@ -1083,12 +1176,20 @@ def generate_cross_capped(
                           L2 distance h was shoved by that firing. Decoding
                           the token at each step is the caller's job (needs
                           prompt_len + sequences).
+        per_layer_trace:  {layer_idx -> list[dict]} with one record per forward
+                          pass (signal 1 of the diagnostic plan). Each record
+                          has keys step, detect_proj, correct_proj, norm, fired,
+                          push_applied, proj_onto_prev_axes. Includes non-fire
+                          steps, so full trajectories are visible.
     """
+    coordinator = _TraceCoordinator()
     hooks = [
         _CrossAxisCappingHook(
             exp.layers[layer_idx],
+            layer_idx,
             per_layer_detect_axes[layer_idx], detect_thresholds[layer_idx],  # gate: assistant axis
             correct_axes[layer_idx], correct_thresholds[layer_idx],          # correction: compliance axis
+            trace_coordinator=coordinator,
         )
         for layer_idx in cap_layers
     ]
@@ -1114,4 +1215,8 @@ def generate_cross_capped(
         for li, h in zip(cap_layers, hooks)
         if h.n_corrected > 0
     }
-    return sequences, n_triggered, n_corrected, corrected_layers, per_layer_events
+    per_layer_trace = {
+        li: list(h.trace)
+        for li, h in zip(cap_layers, hooks)
+    }
+    return sequences, n_triggered, n_corrected, corrected_layers, per_layer_events, per_layer_trace
