@@ -134,13 +134,16 @@ async def classify_row(
 
     @retry(
         retry=retry_if_exception_type(_TRANSIENT_ERRORS),
-        wait=wait_exponential_jitter(initial=2, max=60, jitter=5),
-        stop=stop_after_attempt(6),
+        wait=wait_exponential_jitter(initial=4, max=120, jitter=10),
+        stop=stop_after_attempt(8),
         before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
     )
     async def _call_api():
         async with semaphore:
+            # Small per-request pacing inside the semaphore so we don't
+            # fire bursts every time a slot is released.
+            await asyncio.sleep(0.25)
             return await client.messages.create(
                 model=model,
                 temperature=0.0,
@@ -236,10 +239,10 @@ async def classify_dataframe(
         if output_path is not None:
             df.to_csv(output_path, index=False)
 
-        # Delay between batches to avoid rate-limit spikes
+        # Delay between batches to let the per-minute rate window refresh.
         remaining = len(pending_indices) - (batch_start + len(batch_idx))
         if remaining > 0:
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(3.0)
 
     return df
 
@@ -337,8 +340,10 @@ def main():
         help="Anthropic model for judging (default: claude-sonnet-4-6)",
     )
     parser.add_argument(
-        "--concurrency", type=int, default=5,
-        help="Max concurrent API calls (default: 5)",
+        "--concurrency", type=int, default=2,
+        help="Max concurrent API calls (default: 2). Lower values are safer "
+             "against rate limits on large batches; bump to 5+ if you have a "
+             "higher-tier key and small jobs.",
     )
     parser.add_argument(
         "--resume", action="store_true",
