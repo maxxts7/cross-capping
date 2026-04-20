@@ -20,3 +20,4 @@ anthropic
 tenacity
 python-dotenv
 sentencepiece
+tiktoken

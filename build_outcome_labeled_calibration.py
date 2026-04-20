@@ -353,7 +353,12 @@ def judge_with_harmbench(
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     logger.info("Loading HarmBench classifier: %s", classifier_model)
-    tokenizer = AutoTokenizer.from_pretrained(classifier_model)
+    # use_fast=False forces the slow LlamaTokenizer path, which reads the
+    # SentencePiece tokenizer.model directly. Newer transformers versions
+    # try to convert to a fast tokenizer via TikToken first, which fails
+    # for Llama-2 SentencePiece vocabs and surfaces a confusing tiktoken
+    # ImportError even when sentencepiece is installed.
+    tokenizer = AutoTokenizer.from_pretrained(classifier_model, use_fast=False)
     model = AutoModelForCausalLM.from_pretrained(
         classifier_model,
         torch_dtype=torch.bfloat16,
