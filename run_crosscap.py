@@ -1456,6 +1456,8 @@ def main():
     cfg["CROSS_DETECT_METHOD"] = args.cross_detect_method
     cfg["ORTHOGONALIZE"] = args.orthogonalize          # off by default now
     cfg["CALIBRATION_DIR"] = args.calibration_dir       # None means default JBB/WJ
+    if args.axis_method is not None:
+        cfg["AXIS_METHOD"] = args.axis_method           # override preset's AXIS_METHOD
     if args.n_detect_cal is not None:
         cfg["N_DETECT_CAL"] = args.n_detect_cal
 
@@ -1549,6 +1551,15 @@ def parse_args():
              "axis is built from these outcome-labelled prompts instead of the "
              "default JBB-Behaviors + WildJailbreak train datasets, which use "
              "dataset-of-origin labels that may not match actual model behaviour.",
+    )
+    parser.add_argument(
+        "--axis-method", type=str, default=None, choices=["pca", "mean_diff"],
+        help="Override the preset's compliance-axis construction method. "
+             "pca = first principal component of pooled refusing + compliant "
+             "activations (unsupervised; may capture non-refusal variance). "
+             "mean_diff = normalized (mean_refusing - mean_compliant), "
+             "pointed directly at the class-mean separation. Defaults to the "
+             "preset's AXIS_METHOD (usually pca).",
     )
     parser.add_argument(
         "--cross-detect-method", type=str, default="benign-p1",

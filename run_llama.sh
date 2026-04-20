@@ -16,16 +16,18 @@
 #
 # Usage:
 #   chmod +x run_llama.sh
-#   ./run_llama.sh                                # full run, defaults, reclassify
-#   ./run_llama.sh sanity                         # smoke test
-#   ./run_llama.sh full optimal                   # midpoint threshold
-#   ./run_llama.sh full p25                       # 25th percentile threshold
-#   ./run_llama.sh full mean+std benign-p1        # tighter detect gate
-#   ./run_llama.sh full optimal75 benign-p1 no    # skip reclassify step
+#   ./run_llama.sh                                            # full run, defaults, reclassify
+#   ./run_llama.sh sanity                                     # smoke test
+#   ./run_llama.sh full optimal                               # midpoint threshold
+#   ./run_llama.sh full p25                                   # 25th percentile threshold
+#   ./run_llama.sh full mean+std benign-p1                    # tighter detect gate
+#   ./run_llama.sh full optimal75 benign-p1 no                # skip reclassify step
+#   ./run_llama.sh sanity optimal75 benign-p10 yes mean_diff  # mean-diff axis
 #
 # Compliance threshold options:  optimal75 (default), optimal, optimal90, optimal20, mean+std, mean, p25
 # Cross-detect method options:   benign-p1 (default), benign-p5, benign-p10
 # Reclassify options:            yes (default), no
+# Axis method options:           pca (default), mean_diff
 
 set -e
 
@@ -39,8 +41,9 @@ PRESET="${1:-full}"
 THRESHOLD="${2:-optimal75}"
 CROSS_DETECT="${3:-benign-p1}"
 RECLASSIFY="${4:-yes}"
+AXIS_METHOD="${5:-pca}"
 MODEL="meta-llama/Llama-3.3-70B-Instruct"
-OUTPUT_DIR="results/crosscap_llama_${PRESET}_${THRESHOLD}_${CROSS_DETECT}"
+OUTPUT_DIR="results/crosscap_llama_${PRESET}_${THRESHOLD}_${CROSS_DETECT}_${AXIS_METHOD}"
 
 # API key resolution for the reclassify step. Captured upfront so the long
 # generation can run unattended; benign reclassify needs it at the end.
@@ -86,6 +89,7 @@ echo "  Cross-Axis Capping -- Llama-3.3-70B"
 echo "  Preset:               ${PRESET}"
 echo "  Compliance threshold: ${THRESHOLD}"
 echo "  Cross-detect method:  ${CROSS_DETECT}"
+echo "  Axis method:          ${AXIS_METHOD}"
 echo "  Calibration:          ${CALIB_INFO}"
 echo "  Reclassify:           ${RECLASSIFY}"
 echo "  Anthropic key:        ${KEY_INFO}"
@@ -98,6 +102,7 @@ python run_crosscap.py \
     --model "$MODEL" \
     --compliance-threshold "$THRESHOLD" \
     --cross-detect-method "$CROSS_DETECT" \
+    --axis-method "$AXIS_METHOD" \
     --output-dir "$OUTPUT_DIR"
 
 if [ "$RECLASSIFY" = "yes" ]; then
