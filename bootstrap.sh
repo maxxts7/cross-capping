@@ -36,6 +36,21 @@ export PATH="$HOME/.local/bin:$PATH"
 hash -r
 
 echo ""
+echo "── Installing hf_transfer (Rust-based fast downloader) ──────"
+# The default HF downloader is single-threaded per shard. On cloud
+# bandwidth-capped networks, Llama-3.3-70B can take >30 min to download
+# and often appears hung for long stretches. hf_transfer parallelises
+# byte ranges within each shard and is typically 5-10x faster. The
+# env var is required -- HF won't use it just because it's installed.
+pip install hf_transfer
+export HF_HUB_ENABLE_HF_TRANSFER=1
+# Persist into the user's shell rc so future sessions pick it up too.
+# Only appends if the line isn't already there (idempotent across re-runs).
+if ! grep -qs "HF_HUB_ENABLE_HF_TRANSFER" "$HOME/.bashrc" 2>/dev/null; then
+    echo "export HF_HUB_ENABLE_HF_TRANSFER=1" >> "$HOME/.bashrc"
+fi
+
+echo ""
 echo "── Logging in to HuggingFace ─────────────────────────────────"
 hf auth login "$RUNPOD_SECRET_hf_token"
 
