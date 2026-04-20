@@ -1,39 +1,94 @@
 #!/bin/bash
-# Run the cross-axis capping experiment on Llama-3.3-70B-Instruct.
+# Run the cross-axis capping experiment on Llama-3.3-70B-Instruct, then
+# auto-reclassify the result CSVs (HarmBench for jailbreak files, Claude
+# for benign files).
 #
-# Assistant-axis capping uses the original paper's exact vectors and
-# thresholds from capping_config.pt (experiment: layers_56:72-p0.25).
-# cap_layers are read directly from that config, so --cap-layers is
-# not needed.
+# Auto-behaviours when MODEL is Llama:
+#   * compliance axis is built from Compliant-refusal/{refusing,compliant}.csv
+#     if that directory exists; falls back to JBB+WJ otherwise.
+#   * reclassify_refusals.py runs with --backend harmbench (jailbreaks scored
+#     locally; benign files still need Claude).
 #
 # Note: Llama-3.3-70B in bf16 needs ~140 GB of GPU memory. device_map="auto"
 # will spread layers across visible GPUs; make sure CUDA_VISIBLE_DEVICES
 # exposes enough of them (typically 2+ H100/A100-80GB or 4+ smaller).
+# HarmBench-Llama-2-13b-cls loads after generation finishes and adds ~30 GB.
 #
 # Usage:
 #   chmod +x run_llama.sh
-#   ./run_llama.sh                                # full run, defaults
-#   ./run_llama.sh sanity                         # smoke test (10 jailbreak + 10 benign)
-#   ./run_llama.sh full optimal                   # full run with midpoint threshold
-#   ./run_llama.sh full p25                       # full run with 25th percentile threshold
-#   ./run_llama.sh full mean+std benign-p1        # full run, tighter cross-cap detect gate
+#   ./run_llama.sh                                # full run, defaults, reclassify
+#   ./run_llama.sh sanity                         # smoke test
+#   ./run_llama.sh full optimal                   # midpoint threshold
+#   ./run_llama.sh full p25                       # 25th percentile threshold
+#   ./run_llama.sh full mean+std benign-p1        # tighter detect gate
+#   ./run_llama.sh full optimal75 benign-p1 no    # skip reclassify step
 #
 # Compliance threshold options:  optimal75 (default), optimal, optimal90, optimal20, mean+std, mean, p25
 # Cross-detect method options:   benign-p1 (default), benign-p5, benign-p10
+# Reclassify options:            yes (default), no
 
 set -e
+
+# Paste your key between the quotes for unattended runs. Leave empty to
+# fall back to env var / .env / interactive prompt. Don't commit a real
+# key -- this file is tracked in git. Only used by the reclassify step
+# (for benign files; jailbreak files use HarmBench locally).
+ANTHROPIC_API_KEY_OVERRIDE=""
 
 PRESET="${1:-full}"
 THRESHOLD="${2:-optimal75}"
 CROSS_DETECT="${3:-benign-p1}"
+RECLASSIFY="${4:-yes}"
 MODEL="meta-llama/Llama-3.3-70B-Instruct"
 OUTPUT_DIR="results/crosscap_llama_${PRESET}_${THRESHOLD}_${CROSS_DETECT}"
+
+# API key resolution for the reclassify step. Captured upfront so the long
+# generation can run unattended; benign reclassify needs it at the end.
+# Skipped entirely if RECLASSIFY=no.
+KEY_INFO="not needed (reclassify disabled)"
+if [ "$RECLASSIFY" = "yes" ]; then
+    if [ -n "$ANTHROPIC_API_KEY_OVERRIDE" ]; then
+        ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_OVERRIDE"
+    fi
+    if [ -z "$ANTHROPIC_API_KEY" ] && [ -f .env ]; then
+        # shellcheck disable=SC1091
+        set -a
+        . ./.env
+        set +a
+    fi
+    if [ -z "$ANTHROPIC_API_KEY" ]; then
+        echo "ANTHROPIC_API_KEY not found in env, .env, or script override."
+        echo "Reclassify needs it for benign files (jailbreaks use HarmBench locally)."
+        printf "Enter ANTHROPIC_API_KEY (hidden, or just press Enter to skip reclassify): "
+        read -rs ANTHROPIC_API_KEY
+        echo ""
+        if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "No key provided -- reclassify will be skipped after the run."
+            RECLASSIFY="no"
+            KEY_INFO="skipped (no key)"
+        else
+            export ANTHROPIC_API_KEY
+            KEY_INFO="set (${#ANTHROPIC_API_KEY} chars)"
+        fi
+    else
+        export ANTHROPIC_API_KEY
+        KEY_INFO="set (${#ANTHROPIC_API_KEY} chars)"
+    fi
+fi
+
+CALIB_INFO="default (JBB + WildJailbreak)"
+if [ -d Compliant-refusal ]; then
+    CALIB_INFO="Compliant-refusal/ (outcome-labelled)"
+fi
 
 echo "============================================"
 echo "  Cross-Axis Capping -- Llama-3.3-70B"
 echo "  Preset:               ${PRESET}"
 echo "  Compliance threshold: ${THRESHOLD}"
 echo "  Cross-detect method:  ${CROSS_DETECT}"
+echo "  Calibration:          ${CALIB_INFO}"
+echo "  Reclassify:           ${RECLASSIFY}"
+echo "  Anthropic key:        ${KEY_INFO}"
 echo "  Output:               ${OUTPUT_DIR}"
 echo "============================================"
 echo ""
@@ -44,3 +99,11 @@ python run_crosscap.py \
     --compliance-threshold "$THRESHOLD" \
     --cross-detect-method "$CROSS_DETECT" \
     --output-dir "$OUTPUT_DIR"
+
+if [ "$RECLASSIFY" = "yes" ]; then
+    echo ""
+    echo "── Reclassify (HarmBench for jailbreaks, Claude for benigns) ───────"
+    python reclassify_refusals.py \
+        --input-dir "$OUTPUT_DIR" \
+        --backend harmbench
+fi

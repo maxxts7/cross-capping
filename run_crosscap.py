@@ -182,6 +182,13 @@ PRESETS = {
 MODEL_NAME    = "Qwen/Qwen3-32B"   # the model we're capping
 AXIS_PATH     = None                # None = auto-download the assistant axis from HuggingFace
 
+# Default location for outcome-labelled calibration CSVs when the model is
+# Llama. Auto-used when --calibration-dir isn't explicitly set and the dir
+# exists. Drop refusing.csv + compliant.csv here from a build_calibration.sh
+# run (or symlink the output dir). Qwen has its own paper-validated
+# calibration baked into JBB+WJ, so it stays on the default source.
+DEFAULT_LLAMA_CALIBRATION_DIR = "Compliant-refusal"
+
 # Which layers to apply capping at.
 # We target the upper quarter of the network where safety-relevant signals
 # are strongest. For Qwen3-32B (64 layers total), that's L46-L53
@@ -694,6 +701,7 @@ def save_results(df, output_dir, args, cos_val, cfg, elapsed, cap_layers, cross_
         "n_detect_cal": cfg.get("N_DETECT_CAL"),
         "orthogonalize": cfg.get("ORTHOGONALIZE", False),
         "axis_method": cfg.get("AXIS_METHOD", "pca"),
+        "calibration_source": cfg.get("CALIBRATION_DIR") or "default (JBB + WildJailbreak train)",
         "cross_only": cross_only,
     }
     with open(output_dir / "metadata.json", "w") as f:
@@ -768,6 +776,50 @@ WARMUP_FILE = "warmup.pt"
 # parallel chunk workers as you have GPUs.
 # ============================================================
 
+def _load_outcome_calibration(calib_dir: str, n_compliance: int) -> tuple[list[str], list[str]]:
+    """Load refusing + compliant prompts from outcome-labelled CSVs produced
+    by classify_calibration.py. Files expected at <calib_dir>/refusing.csv
+    and <calib_dir>/compliant.csv, each with a 'prompt_text' column.
+
+    Takes up to n_compliance prompts from each side. If a CSV has fewer rows
+    than requested, uses what's available and logs a warning -- doesn't pad
+    or error, since outcome-labelling typically yields uneven class sizes
+    (the model refuses far less than half of prompts intended as refusing).
+    """
+    calib_path = Path(calib_dir)
+    refusing_csv = calib_path / "refusing.csv"
+    compliant_csv = calib_path / "compliant.csv"
+    missing = [str(p) for p in (refusing_csv, compliant_csv) if not p.exists()]
+    if missing:
+        raise FileNotFoundError(
+            f"Outcome-labelled calibration CSVs not found: {missing}. "
+            "Run build_calibration.sh (or generate_calibration.py + "
+            "classify_calibration.py) to produce them."
+        )
+
+    refusing_df = pd.read_csv(refusing_csv)
+    compliant_df = pd.read_csv(compliant_csv)
+    if "prompt_text" not in refusing_df.columns or "prompt_text" not in compliant_df.columns:
+        raise ValueError(
+            f"Outcome-labelled CSVs in {calib_dir} are missing 'prompt_text' "
+            "column. Were they written by classify_calibration.py?"
+        )
+
+    refusing = refusing_df["prompt_text"].astype(str).head(n_compliance).tolist()
+    compliant = compliant_df["prompt_text"].astype(str).head(n_compliance).tolist()
+    if len(refusing) < n_compliance:
+        logger.warning(
+            "refusing.csv has only %d rows (requested %d); using all available",
+            len(refusing), n_compliance,
+        )
+    if len(compliant) < n_compliance:
+        logger.warning(
+            "compliant.csv has only %d rows (requested %d); using all available",
+            len(compliant), n_compliance,
+        )
+    return refusing, compliant
+
+
 def _compute_warmup_state(exp, cfg) -> dict:
     """Compute all per-experiment state that both do_warmup and do_run need.
 
@@ -791,14 +843,44 @@ def _compute_warmup_state(exp, cfg) -> dict:
     print(f"  Cap layers from original paper: L{cap_layers[0]}-L{cap_layers[-1]}")
 
     # Step 2: Build the compliance axis.
-    # WJ train is loaded with n_compliance prompts for compliance axis
-    # construction. This is disjoint from the WJ EVAL split used in the run,
-    # so eval prompts never leak into calibration.
+    # Default sources: JBB-Behaviors (refusing) + WJ train adversarial_harmful
+    # (compliant). These are dataset-of-origin labels — a proxy for actual
+    # model behaviour. If --calibration-dir is set, use the outcome-labelled
+    # CSVs (refusing.csv + compliant.csv) produced by classify_calibration.py
+    # instead, which are grounded in what the model actually did rather than
+    # what we expect it to do.
     n_compliance = cfg["N_COMPLIANCE"]
     n_detect_cal = cfg["N_DETECT_CAL"]
     print(f"\nBuilding compliance axis ({n_compliance} prompts per side)...")
-    refusing_prompts = load_jbb_behaviors(n_prompts=n_compliance)
-    wj_train = load_wildjailbreak_train(n_prompts=n_compliance)
+
+    # Calibration source resolution. Explicit --calibration-dir always wins.
+    # Otherwise: Llama auto-uses outcome-labelled CSVs at the default path
+    # if they exist (else falls back with a warning). Qwen always uses the
+    # default JBB + WildJailbreak datasets unless --calibration-dir is set,
+    # since the paper's published axes were calibrated against that source.
+    calib_dir = cfg.get("CALIBRATION_DIR")
+    if not calib_dir and "llama" in MODEL_NAME.lower():
+        if Path(DEFAULT_LLAMA_CALIBRATION_DIR).exists():
+            calib_dir = DEFAULT_LLAMA_CALIBRATION_DIR
+            # Persist the auto-resolved value so metadata.json reflects what
+            # was actually used, not just what was passed on the command line.
+            cfg["CALIBRATION_DIR"] = calib_dir
+            print(f"  Llama detected; auto-using {DEFAULT_LLAMA_CALIBRATION_DIR}")
+        else:
+            print(
+                f"  Llama detected but {DEFAULT_LLAMA_CALIBRATION_DIR} not found; "
+                f"falling back to default JBB+WJ. Run build_calibration.sh and "
+                f"symlink the output to {DEFAULT_LLAMA_CALIBRATION_DIR} to "
+                f"enable outcome-labelled calibration."
+            )
+
+    if calib_dir:
+        refusing_prompts, wj_train = _load_outcome_calibration(calib_dir, n_compliance)
+        print(f"  Calibration source: outcome-labelled CSVs from {calib_dir}")
+    else:
+        refusing_prompts = load_jbb_behaviors(n_prompts=n_compliance)
+        wj_train = load_wildjailbreak_train(n_prompts=n_compliance)
+        print(f"  Calibration source: default (JBB-Behaviors + WildJailbreak train)")
 
     if cfg.get("AXIS_METHOD") == "mean_diff":
         compliance_axes, compliance_stats, refusing_acts, compliant_acts = compute_mean_diff_compliance_axis(
@@ -1182,6 +1264,7 @@ def main():
     cfg["COMPLIANCE_THRESHOLD"] = args.compliance_threshold
     cfg["CROSS_DETECT_METHOD"] = args.cross_detect_method
     cfg["ORTHOGONALIZE"] = args.orthogonalize          # off by default now
+    cfg["CALIBRATION_DIR"] = args.calibration_dir       # None means default JBB/WJ
     if args.n_detect_cal is not None:
         cfg["N_DETECT_CAL"] = args.n_detect_cal
 
@@ -1267,6 +1350,14 @@ def parse_args():
              "is now reserved for cross-detect-tau calibration; enabling this "
              "correlates axis geometry with the threshold computed from the "
              "same prompts.",
+    )
+    parser.add_argument(
+        "--calibration-dir", type=str, default=None,
+        help="Path to a directory containing refusing.csv and compliant.csv "
+             "(produced by classify_calibration.py). When set, the compliance "
+             "axis is built from these outcome-labelled prompts instead of the "
+             "default JBB-Behaviors + WildJailbreak train datasets, which use "
+             "dataset-of-origin labels that may not match actual model behaviour.",
     )
     parser.add_argument(
         "--cross-detect-method", type=str, default="benign-p1",
