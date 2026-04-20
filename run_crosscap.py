@@ -784,15 +784,21 @@ WARMUP_FILE = "warmup.pt"
 
 def _hf_cache_dir_size(model_name: str) -> tuple[Path, int]:
     """Return (cache_path_for_model, total_bytes) for the model's blob
-    directory under ~/.cache/huggingface/hub. Returns 0 bytes if the path
-    doesn't exist yet (first-run case, before any shard has landed)."""
-    cache_base = (
-        os.environ.get("HF_HOME")
-        or os.environ.get("HUGGINGFACE_HUB_CACHE")
-        or os.path.expanduser("~/.cache/huggingface")
-    )
+    directory. Returns 0 bytes if the path doesn't exist yet.
+
+    Resolution order matches HF conventions:
+      HUGGINGFACE_HUB_CACHE (direct path to .../hub) wins if set.
+      HF_HOME (parent dir, we append /hub) is next.
+      Fallback to ~/.cache/huggingface/hub.
+    """
+    if "HUGGINGFACE_HUB_CACHE" in os.environ:
+        hub_dir = Path(os.environ["HUGGINGFACE_HUB_CACHE"])
+    elif "HF_HOME" in os.environ:
+        hub_dir = Path(os.environ["HF_HOME"]) / "hub"
+    else:
+        hub_dir = Path(os.path.expanduser("~/.cache/huggingface/hub"))
     safe_name = "models--" + model_name.replace("/", "--")
-    path = Path(cache_base) / "hub" / safe_name
+    path = hub_dir / safe_name
     if not path.exists():
         return path, 0
     total = 0
@@ -826,11 +832,15 @@ def start_download_monitor(model_name: str, interval: float = 15.0):
 
     def _loop():
         start_t = time.time()
-        _, start_bytes = _hf_cache_dir_size(model_name)
+        cache_path, start_bytes = _hf_cache_dir_size(model_name)
         last_bytes = start_bytes
         # Immediate heartbeat so the user sees the monitor is alive
-        # without waiting a full interval first.
-        _tqdm.write(f"  [download] monitor started (poll every {interval:.0f}s; start={start_bytes/1e9:.1f} GB in cache)")
+        # without waiting a full interval first. Prints the actual path
+        # being polled so mismatches (e.g. HF writing elsewhere) are obvious.
+        _tqdm.write(
+            f"  [download] monitor started  path={cache_path}  "
+            f"start={start_bytes/1e9:.1f} GB  poll={interval:.0f}s"
+        )
         while not stop.wait(interval):
             _, now_bytes = _hf_cache_dir_size(model_name)
             elapsed = time.time() - start_t
