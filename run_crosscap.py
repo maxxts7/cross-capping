@@ -782,6 +782,66 @@ WARMUP_FILE = "warmup.pt"
 # parallel chunk workers as you have GPUs.
 # ============================================================
 
+def _hf_cache_dir_size(model_name: str) -> tuple[Path, int]:
+    """Return (cache_path_for_model, total_bytes) for the model's blob
+    directory under ~/.cache/huggingface/hub. Returns 0 bytes if the path
+    doesn't exist yet (first-run case, before any shard has landed)."""
+    cache_base = (
+        os.environ.get("HF_HOME")
+        or os.environ.get("HUGGINGFACE_HUB_CACHE")
+        or os.path.expanduser("~/.cache/huggingface")
+    )
+    safe_name = "models--" + model_name.replace("/", "--")
+    path = Path(cache_base) / "hub" / safe_name
+    if not path.exists():
+        return path, 0
+    total = 0
+    for p in path.rglob("*"):
+        try:
+            total += p.stat().st_size
+        except OSError:
+            pass
+    return path, total
+
+
+def start_download_monitor(model_name: str, interval: float = 15.0):
+    """Spawn a background thread that prints cache size + rate while the
+    main thread is downloading. Returns a stop event -- the caller should
+    set it once the model is loaded so the thread exits cleanly.
+
+    Exists because HF's own tqdm bar only ticks when a shard completes,
+    so the user sees nothing between completions. This prints bytes-landed
+    every `interval` seconds, so progress is visible at a granular level
+    without needing a second terminal.
+    """
+    import threading
+
+    stop = threading.Event()
+
+    def _loop():
+        start_t = time.time()
+        _, start_bytes = _hf_cache_dir_size(model_name)
+        last_bytes = start_bytes
+        while not stop.wait(interval):
+            _, now_bytes = _hf_cache_dir_size(model_name)
+            elapsed = time.time() - start_t
+            delta_bytes = now_bytes - last_bytes
+            rate_mbps = (delta_bytes / 1e6) / interval if interval > 0 else 0
+            total_gb = now_bytes / 1e9
+            total_delta_gb = (now_bytes - start_bytes) / 1e9
+            print(
+                f"  [download] cache={total_gb:.1f} GB  "
+                f"+{total_delta_gb:.1f} GB since start  "
+                f"rate={rate_mbps:.0f} MB/s  elapsed={elapsed:.0f}s",
+                flush=True,
+            )
+            last_bytes = now_bytes
+
+    t = threading.Thread(target=_loop, daemon=True)
+    t.start()
+    return stop
+
+
 def preflight_hf_access(model_name: str) -> None:
     """Sanity-check HF download readiness BEFORE committing to the long
     model pull. Verifies: token + whoami, gated-model access via a small
@@ -1126,7 +1186,11 @@ def do_warmup(args, cfg, output_dir):
 
     print(f"Loading model: {MODEL_NAME}")
     preflight_hf_access(MODEL_NAME)
-    exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH)
+    _monitor_stop = start_download_monitor(MODEL_NAME)
+    try:
+        exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH)
+    finally:
+        _monitor_stop.set()
     print(f"  Layers: {exp.num_layers}, Hidden dim: {exp.hidden_dim}")
 
     state = _compute_warmup_state(exp, cfg)
@@ -1193,7 +1257,11 @@ def do_chunk(args, cfg, output_dir):
     # Step 2: Load the model (each chunk worker needs its own copy in GPU memory)
     print(f"Loading model: {MODEL_NAME}")
     preflight_hf_access(MODEL_NAME)
-    exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH)
+    _monitor_stop = start_download_monitor(MODEL_NAME)
+    try:
+        exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH)
+    finally:
+        _monitor_stop.set()
 
     # Step 3: Figure out which prompts belong to this chunk
     prompts = build_prompts(cfg)
@@ -1297,7 +1365,11 @@ def do_run(args, cfg, output_dir):
 
     print(f"\nLoading model: {MODEL_NAME}")
     preflight_hf_access(MODEL_NAME)
-    exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH)
+    _monitor_stop = start_download_monitor(MODEL_NAME)
+    try:
+        exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH)
+    finally:
+        _monitor_stop.set()
     print(f"  Layers: {exp.num_layers}, Hidden dim: {exp.hidden_dim}")
     print(f"  Cap layers (before paper override): L{CAP_LAYERS[0]}-L{CAP_LAYERS[-1]} ({len(CAP_LAYERS)} layers)")
 
