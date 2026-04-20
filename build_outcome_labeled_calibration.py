@@ -36,8 +36,13 @@ from pathlib import Path
 
 import pandas as pd
 import torch
-from dotenv import load_dotenv
 from tqdm import tqdm
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # python-dotenv is optional; build_calibration.sh sources .env itself
+    def load_dotenv(*_args, **_kwargs):  # type: ignore[no-redef]
+        return False
 
 from anthropic import (
     AsyncAnthropic,
