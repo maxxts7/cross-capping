@@ -816,12 +816,21 @@ def start_download_monitor(model_name: str, interval: float = 15.0):
     """
     import threading
 
+    # tqdm.write is the one safe way to emit output while a tqdm progress
+    # bar is active -- regular print() gets overwritten or mangled when
+    # the bar redraws. Using it means our monitor lines actually show
+    # up above the "Fetching 30 files" bar instead of disappearing.
+    from tqdm import tqdm as _tqdm
+
     stop = threading.Event()
 
     def _loop():
         start_t = time.time()
         _, start_bytes = _hf_cache_dir_size(model_name)
         last_bytes = start_bytes
+        # Immediate heartbeat so the user sees the monitor is alive
+        # without waiting a full interval first.
+        _tqdm.write(f"  [download] monitor started (poll every {interval:.0f}s; start={start_bytes/1e9:.1f} GB in cache)")
         while not stop.wait(interval):
             _, now_bytes = _hf_cache_dir_size(model_name)
             elapsed = time.time() - start_t
@@ -829,11 +838,10 @@ def start_download_monitor(model_name: str, interval: float = 15.0):
             rate_mbps = (delta_bytes / 1e6) / interval if interval > 0 else 0
             total_gb = now_bytes / 1e9
             total_delta_gb = (now_bytes - start_bytes) / 1e9
-            print(
+            _tqdm.write(
                 f"  [download] cache={total_gb:.1f} GB  "
                 f"+{total_delta_gb:.1f} GB since start  "
-                f"rate={rate_mbps:.0f} MB/s  elapsed={elapsed:.0f}s",
-                flush=True,
+                f"rate={rate_mbps:.0f} MB/s  elapsed={elapsed:.0f}s"
             )
             last_bytes = now_bytes
 
