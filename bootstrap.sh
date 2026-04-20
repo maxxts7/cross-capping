@@ -1,16 +1,17 @@
 #!/bin/bash
 # Bootstrap a fresh machine (e.g. RunPod) for the cross-capping experiments.
-# Installs the HuggingFace CLI, logs in with the RunPod-provided token,
-# and installs Python dependencies including flash-attn.
+# Installs the HuggingFace CLI, hf_transfer, flash-attn, and the repo's
+# Python requirements.
 #
 # Run this from INSIDE the already-cloned cross-capping repo. Clone the
 # repo yourself first, cd into it, then:
 #     chmod +x bootstrap.sh
 #     ./bootstrap.sh
 #
-# Expects RUNPOD_SECRET_hf_token to be set in the environment (RunPod
-# exposes pod secrets with this prefix). If you're not on RunPod, just
-# export RUNPOD_SECRET_hf_token=<your-hf-token> before invoking.
+# HF login is NOT performed here -- do it yourself after bootstrap with:
+#     hf auth login <your-hf-token>
+# or set HF_TOKEN / RUNPOD_SECRET_hf_token in the environment before
+# running anything that needs HF downloads.
 #
 # Requires torch to be pre-installed in the base environment (the RunPod
 # PyTorch image provides it). flash-attn's --no-build-isolation flag
@@ -18,13 +19,6 @@
 # before the main requirements install.
 
 set -e
-
-if [ -z "${RUNPOD_SECRET_hf_token:-}" ]; then
-    echo "ERROR: RUNPOD_SECRET_hf_token is not set."
-    echo "On RunPod, add it in the pod's Secrets configuration."
-    echo "Elsewhere: export RUNPOD_SECRET_hf_token=<your-hf-token>"
-    exit 1
-fi
 
 echo "── Installing HuggingFace CLI ────────────────────────────────"
 curl -LsSf https://hf.co/cli/install.sh | bash
@@ -47,10 +41,6 @@ export HF_HUB_ENABLE_HF_TRANSFER=1
 if ! grep -qs "HF_HUB_ENABLE_HF_TRANSFER" "$HOME/.bashrc" 2>/dev/null; then
     echo "export HF_HUB_ENABLE_HF_TRANSFER=1" >> "$HOME/.bashrc"
 fi
-
-echo ""
-echo "── Logging in to HuggingFace ─────────────────────────────────"
-hf auth login "$RUNPOD_SECRET_hf_token"
 
 echo ""
 echo "── Installing flash-attn (slow; compiles against torch) ─────"
