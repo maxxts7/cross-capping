@@ -69,7 +69,15 @@ if [ -d "$MODEL_CACHE" ]; then
     echo ""
 fi
 
-hf download "$MODEL"
+# Skip .bin / .pth PyTorch weights -- the safetensors shards already contain
+# the same weights, and transformers prefers safetensors when both exist. The
+# Llama-3.3-70B repo ships both formats (~140 GB each), so including bin files
+# roughly doubles the download size to ~280 GB for no real benefit.
+hf download "$MODEL" \
+    --exclude "*.bin" \
+    --exclude "*.bin.index.json" \
+    --exclude "*.pth" \
+    --exclude "*.pt"
 
 echo ""
 echo "============================================"
