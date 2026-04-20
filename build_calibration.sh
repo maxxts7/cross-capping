@@ -1,20 +1,16 @@
 #!/bin/bash
-# Build an outcome-labelled calibration dataset by running Llama-3.3-70B
-# uncapped on a batch of potentially-harmful prompts and judging each output.
-# Produces clean refusing.csv / compliant.csv splits grounded in actual
-# model behaviour, not dataset-of-origin labels.
+# Two-stage outcome-labelled calibration pipeline:
+#   1. generate_calibration.py    -- runs Llama-3.3-70B uncapped on harmful
+#                                    prompts, writes raw_generations.csv
+#   2. classify_calibration.py    -- judges each row, writes labeled.csv
+#                                    plus clean refusing.csv / compliant.csv
 #
-# Note: Llama-3.3-70B in bf16 needs ~140 GB of GPU memory. device_map="auto"
-# will spread layers across visible GPUs; make sure CUDA_VISIBLE_DEVICES
-# exposes enough of them (typically 2+ H100/A100-80GB or 4+ smaller).
+# Each script is also runnable on its own (e.g. generate on the GPU box,
+# transfer the CSV, classify with Claude API on a different machine).
+# This wrapper just chains them.
 #
-# Two judging backends:
-#   anthropic  — Claude API. Needs ANTHROPIC_API_KEY (override below, env,
-#                .env, or interactive prompt). Costs API tokens. Produces
-#                4-class labels (refusal / compliance / partial_refusal / error).
-#   harmbench  — local cais/HarmBench-Llama-2-13b-cls classifier. Needs
-#                ~30 GB GPU memory loaded after the generation step. No
-#                API cost. Binary refusal/compliance only.
+# Note: Llama-3.3-70B in bf16 needs ~140 GB GPU memory. With backend=harmbench,
+# add another ~30 GB once HarmBench-Llama-2-13b-cls loads after generation.
 #
 # Usage:
 #   chmod +x build_calibration.sh
@@ -23,7 +19,7 @@
 #   ./build_calibration.sh both 200 harmbench       # local classifier
 #   ./build_calibration.sh jbb 100 harmbench        # JBB only, local
 #
-# Source:    jbb, wj, both     (default: both)
+# Source:    jbb, wj, both        (default: both)
 # n_prompts: total across selected sources (default: 200)
 # backend:   anthropic, harmbench (default: anthropic)
 
@@ -85,10 +81,16 @@ echo "  Output:      ${OUTPUT_DIR}"
 echo "============================================"
 echo ""
 
-python build_outcome_labeled_calibration.py \
+echo "── Stage 1: generate ──────────────────────────────────────────"
+python generate_calibration.py \
     --source "$SOURCE" \
     --n-prompts "$N_PROMPTS" \
     --output-dir "$OUTPUT_DIR" \
     --model-name "$MODEL" \
-    --judge-backend "$BACKEND" \
     --resume
+
+echo ""
+echo "── Stage 2: classify ──────────────────────────────────────────"
+python classify_calibration.py \
+    --output-dir "$OUTPUT_DIR" \
+    --backend "$BACKEND"
