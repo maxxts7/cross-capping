@@ -854,25 +854,28 @@ def _compute_warmup_state(exp, cfg) -> dict:
     print(f"\nBuilding compliance axis ({n_compliance} prompts per side)...")
 
     # Calibration source resolution. Explicit --calibration-dir always wins.
-    # Otherwise: Llama auto-uses outcome-labelled CSVs at the default path
-    # if they exist (else falls back with a warning). Qwen always uses the
-    # default JBB + WildJailbreak datasets unless --calibration-dir is set,
-    # since the paper's published axes were calibrated against that source.
+    # Otherwise: Llama REQUIRES outcome-labelled CSVs at the default path --
+    # errors loudly if they're missing rather than silently falling back to
+    # JBB+WJ, because the dataset-of-origin labelling produces a degenerate
+    # axis on this model (0.15 cos with the assistant axis in past runs).
+    # Qwen always uses the default JBB + WildJailbreak datasets unless
+    # --calibration-dir is set, since the paper's published axes were
+    # calibrated against that source.
     calib_dir = cfg.get("CALIBRATION_DIR")
     if not calib_dir and "llama" in MODEL_NAME.lower():
-        if Path(DEFAULT_LLAMA_CALIBRATION_DIR).exists():
-            calib_dir = DEFAULT_LLAMA_CALIBRATION_DIR
-            # Persist the auto-resolved value so metadata.json reflects what
-            # was actually used, not just what was passed on the command line.
-            cfg["CALIBRATION_DIR"] = calib_dir
-            print(f"  Llama detected; auto-using {DEFAULT_LLAMA_CALIBRATION_DIR}")
-        else:
-            print(
-                f"  Llama detected but {DEFAULT_LLAMA_CALIBRATION_DIR} not found; "
-                f"falling back to default JBB+WJ. Run build_calibration.sh and "
-                f"symlink the output to {DEFAULT_LLAMA_CALIBRATION_DIR} to "
-                f"enable outcome-labelled calibration."
+        if not Path(DEFAULT_LLAMA_CALIBRATION_DIR).exists():
+            raise FileNotFoundError(
+                f"Llama detected but {DEFAULT_LLAMA_CALIBRATION_DIR}/ not found. "
+                f"Outcome-labelled calibration is required for Llama; run "
+                f"build_calibration.sh to produce refusing.csv + compliant.csv "
+                f"and place them at {DEFAULT_LLAMA_CALIBRATION_DIR}/, or pass "
+                f"--calibration-dir <path> explicitly to override."
             )
+        calib_dir = DEFAULT_LLAMA_CALIBRATION_DIR
+        # Persist the resolved value so metadata.json reflects what was
+        # actually used, not just what was passed on the command line.
+        cfg["CALIBRATION_DIR"] = calib_dir
+        print(f"  Llama detected; using {DEFAULT_LLAMA_CALIBRATION_DIR}")
 
     if calib_dir:
         refusing_prompts, wj_train = _load_outcome_calibration(calib_dir, n_compliance)
