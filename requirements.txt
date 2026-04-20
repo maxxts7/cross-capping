@@ -19,3 +19,4 @@ datasets
 anthropic
 tenacity
 python-dotenv
+sentencepiece
