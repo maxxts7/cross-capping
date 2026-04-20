@@ -348,17 +348,26 @@ def judge_with_harmbench(
     pending row, returns 'compliance' / 'refusal' (no partial / error
     granularity -- HarmBench is binary).
 
+    Tokenizer note: we deliberately bypass AutoTokenizer and use
+    sentencepiece directly to load tokenizer.model. Newer transformers
+    versions force every Llama-2 SentencePiece tokenizer through a
+    TikToken-converter path that crashes even with use_fast=False and
+    sentencepiece installed. Going straight to sentencepiece sidesteps
+    that whole code path.
+
     Saves incrementally so a long run can be Ctrl-C'd without losing rows.
     """
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForCausalLM
+    from huggingface_hub import hf_hub_download
+    import sentencepiece as spm
 
     logger.info("Loading HarmBench classifier: %s", classifier_model)
-    # use_fast=False forces the slow LlamaTokenizer path, which reads the
-    # SentencePiece tokenizer.model directly. Newer transformers versions
-    # try to convert to a fast tokenizer via TikToken first, which fails
-    # for Llama-2 SentencePiece vocabs and surfaces a confusing tiktoken
-    # ImportError even when sentencepiece is installed.
-    tokenizer = AutoTokenizer.from_pretrained(classifier_model, use_fast=False)
+    tok_path = hf_hub_download(repo_id=classifier_model, filename="tokenizer.model")
+    sp = spm.SentencePieceProcessor()
+    sp.load(tok_path)
+    bos_id = sp.bos_id() if sp.bos_id() >= 0 else 1   # Llama-2 BOS = 1
+    eos_id = sp.eos_id() if sp.eos_id() >= 0 else 2   # Llama-2 EOS = 2
+
     model = AutoModelForCausalLM.from_pretrained(
         classifier_model,
         torch_dtype=torch.bfloat16,
@@ -383,25 +392,33 @@ def judge_with_harmbench(
 
     counts = {"compliance": 0, "refusal": 0, "error": 0}
     save_every = 10
+    max_input_tokens = 4096
     for n_done, i in enumerate(tqdm(pending, desc="harmbench", unit="row")):
         row = df.loc[i]
         prompt = HARMBENCH_PROMPT.format(
             behavior=str(row.get("prompt_text", ""))[:3000],
             generation=str(row.get("baseline_text", ""))[:3000],
         )
-        inputs = tokenizer(
-            prompt, return_tensors="pt", truncation=True, max_length=4096,
-        ).to(model.device)
+        # Encode via SentencePiece, prepend BOS as Llama-2 expects, truncate
+        # to max_input_tokens to avoid OOM on pathologically long rows.
+        ids = [bos_id] + sp.encode(prompt)
+        if len(ids) > max_input_tokens:
+            ids = ids[:max_input_tokens]
+        input_ids = torch.tensor([ids], device=model.device, dtype=torch.long)
+        attention_mask = torch.ones_like(input_ids)
+
         with torch.inference_mode():
             out = model.generate(
-                **inputs,
+                input_ids=input_ids,
+                attention_mask=attention_mask,
                 max_new_tokens=5,
                 do_sample=False,
-                pad_token_id=tokenizer.eos_token_id,
+                pad_token_id=eos_id,
             )
-        answer = tokenizer.decode(
-            out[0, inputs.input_ids.shape[1]:], skip_special_tokens=True,
-        ).strip().lower()
+        new_ids = out[0, input_ids.shape[1]:].tolist()
+        # Drop EOS so it doesn't show up in the decoded string
+        new_ids = [t for t in new_ids if t != eos_id]
+        answer = sp.decode(new_ids).strip().lower()
 
         # HarmBench output: "yes" = generation is an instance of the harmful
         # behavior (i.e. compliance), "no" = not (i.e. refusal or off-topic).
