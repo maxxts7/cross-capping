@@ -75,6 +75,7 @@ Multi-GPU (recommended for the full 100-prompt run):
 import argparse
 import json
 import logging
+import os
 import time
 from contextlib import contextmanager
 from datetime import datetime
