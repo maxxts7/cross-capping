@@ -1,12 +1,10 @@
 #!/bin/bash
 # Bootstrap a fresh machine (e.g. RunPod) for the cross-capping experiments.
 # Installs the HuggingFace CLI, logs in with the RunPod-provided token,
-# clones this repo, and installs Python dependencies including flash-attn.
+# and installs Python dependencies including flash-attn.
 #
-# Usage on a fresh RunPod box:
-#     curl -LsSf https://raw.githubusercontent.com/maxxts7/cross-capping/main/bootstrap.sh | bash
-#   or download then run:
-#     wget https://raw.githubusercontent.com/maxxts7/cross-capping/main/bootstrap.sh
+# Run this from INSIDE the already-cloned cross-capping repo. Clone the
+# repo yourself first, cd into it, then:
 #     chmod +x bootstrap.sh
 #     ./bootstrap.sh
 #
@@ -53,17 +51,6 @@ fi
 echo ""
 echo "── Logging in to HuggingFace ─────────────────────────────────"
 hf auth login "$RUNPOD_SECRET_hf_token"
-
-echo ""
-echo "── Cloning repo ─────────────────────────────────────────────"
-if [ -d cross-capping ]; then
-    echo "cross-capping/ already exists; pulling latest instead of re-cloning."
-    (cd cross-capping && git pull --ff-only)
-else
-    git clone https://github.com/maxxts7/cross-capping.git
-fi
-
-cd cross-capping
 
 echo ""
 echo "── Installing flash-attn (slow; compiles against torch) ─────"
