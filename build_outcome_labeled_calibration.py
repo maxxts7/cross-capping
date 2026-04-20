@@ -38,12 +38,6 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 
-try:
-    from dotenv import load_dotenv
-except ImportError:  # python-dotenv is optional; build_calibration.sh sources .env itself
-    def load_dotenv(*_args, **_kwargs):  # type: ignore[no-redef]
-        return False
-
 from anthropic import (
     AsyncAnthropic,
     APIConnectionError,
@@ -67,8 +61,6 @@ from run_crosscap import (
     load_jbb_behaviors,
     load_wildjailbreak_train,
 )
-
-load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
