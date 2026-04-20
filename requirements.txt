@@ -16,3 +16,6 @@ Pillow>=9.1.0
 jupyter
 ipykernel
 datasets
+anthropic
+tenacity
+python-dotenv
