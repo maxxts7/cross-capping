@@ -102,6 +102,11 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%H:%M:%S",
 )
+# Silence HTTP-client chatter. Each shard download was logging a HEAD
+# request at INFO, producing 30 lines per HF model pull interleaved
+# with tqdm bars; drop those to WARNING so only real problems show.
+for noisy in ("httpx", "httpcore", "urllib3", "huggingface_hub.file_download"):
+    logging.getLogger(noisy).setLevel(logging.WARNING)
 logger = logging.getLogger("crosscap")
 
 
@@ -776,6 +781,95 @@ WARMUP_FILE = "warmup.pt"
 # parallel chunk workers as you have GPUs.
 # ============================================================
 
+def preflight_hf_access(model_name: str) -> None:
+    """Sanity-check HF download readiness BEFORE committing to the long
+    model pull. Verifies: token + whoami, gated-model access via a small
+    metadata probe, cache free disk space, hf_transfer availability.
+
+    Prints a compact status table. Raises on blocking failures (bad token,
+    no gated access, insufficient disk). Warns on non-blocking ones
+    (hf_transfer missing) without stopping the run.
+
+    Rationale: the HF CLI's download hang mode is "many HEAD 302s, zero
+    GETs," which looks identical whether the problem is missing model
+    license, a bad token, a full disk, or just slow startup. This
+    preflight distinguishes those cases up front.
+    """
+    import shutil
+    from huggingface_hub import HfApi
+    from huggingface_hub.errors import GatedRepoError, RepositoryNotFoundError
+
+    print(f"\n── Preflight: {model_name} ─────────────────")
+
+    # 1. Token valid + identity
+    api = HfApi()
+    try:
+        who = api.whoami()
+        print(f"  HF auth:           OK (user={who.get('name', '?')})")
+    except Exception as e:
+        print(f"  HF auth:           FAIL ({type(e).__name__}: {e})")
+        print(f"    Fix: hf auth login  (or set HF_TOKEN env)")
+        raise
+
+    # 2. Gated / private model access via quick metadata probe.
+    # model_info() is a single JSON call; it'll fail fast if the model
+    # is gated and we haven't accepted the license.
+    try:
+        api.model_info(model_name)
+        print(f"  Model access:      OK")
+    except GatedRepoError:
+        print(f"  Model access:      FAIL (gated, license not accepted)")
+        print(f"    Fix: accept license at https://huggingface.co/{model_name}")
+        raise
+    except RepositoryNotFoundError:
+        print(f"  Model access:      FAIL (repo not found OR token lacks read access)")
+        print(f"    Fix: check the model name and that your HF token has access")
+        raise
+    except Exception as e:
+        print(f"  Model access:      FAIL ({type(e).__name__}: {e})")
+        raise
+
+    # 3. Cache disk space. 70B bf16 weights are ~140 GB; require 150+ GB free.
+    cache_dir = (
+        os.environ.get("HF_HOME")
+        or os.environ.get("HUGGINGFACE_HUB_CACHE")
+        or os.path.expanduser("~/.cache/huggingface")
+    )
+    Path(cache_dir).mkdir(parents=True, exist_ok=True)
+    try:
+        free_gb = shutil.disk_usage(cache_dir).free / 1e9
+        needed_gb = 150 if "70" in model_name.lower() or "70b" in model_name.lower() else 70
+        if free_gb >= needed_gb:
+            print(f"  Cache free space:  {free_gb:.1f} GB at {cache_dir}  (OK, need ~{needed_gb})")
+        else:
+            print(f"  Cache free space:  {free_gb:.1f} GB at {cache_dir}  (LOW, need ~{needed_gb})")
+            raise RuntimeError(
+                f"Only {free_gb:.1f} GB free at {cache_dir}; {model_name} needs ~{needed_gb} GB. "
+                "Free up disk or set HF_HOME to a larger volume."
+            )
+    except RuntimeError:
+        raise
+    except Exception as e:
+        print(f"  Cache free space:  SKIP ({e})")
+
+    # 4. hf_transfer fast path (non-blocking). The default HF downloader
+    # is slow on large sharded models; hf_transfer is ~5-10x faster and
+    # the reason most "stuck" downloads become "fast" after enabling.
+    try:
+        import hf_transfer  # noqa: F401
+        enabled = os.environ.get("HF_HUB_ENABLE_HF_TRANSFER", "0") == "1"
+        if enabled:
+            print(f"  hf_transfer:       installed + enabled (fast downloads)")
+        else:
+            print(f"  hf_transfer:       installed but DISABLED")
+            print(f"    Enable with: export HF_HUB_ENABLE_HF_TRANSFER=1")
+    except ImportError:
+        print(f"  hf_transfer:       NOT installed -- downloads will be slow")
+        print(f"    Install with: pip install hf_transfer   then set HF_HUB_ENABLE_HF_TRANSFER=1")
+
+    print(f"── Preflight OK; proceeding to model load ──\n")
+
+
 def _load_outcome_calibration(calib_dir: str, n_compliance: int) -> tuple[list[str], list[str]]:
     """Load refusing + compliant prompts from outcome-labelled CSVs produced
     by classify_calibration.py. Files expected at <calib_dir>/refusing.csv
@@ -1030,6 +1124,7 @@ def do_warmup(args, cfg, output_dir):
     print("=== WARMUP: downloading and pre-computing ===\n")
 
     print(f"Loading model: {MODEL_NAME}")
+    preflight_hf_access(MODEL_NAME)
     exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH)
     print(f"  Layers: {exp.num_layers}, Hidden dim: {exp.hidden_dim}")
 
@@ -1096,6 +1191,7 @@ def do_chunk(args, cfg, output_dir):
 
     # Step 2: Load the model (each chunk worker needs its own copy in GPU memory)
     print(f"Loading model: {MODEL_NAME}")
+    preflight_hf_access(MODEL_NAME)
     exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH)
 
     # Step 3: Figure out which prompts belong to this chunk
@@ -1199,6 +1295,7 @@ def do_run(args, cfg, output_dir):
     t_start = time.time()
 
     print(f"\nLoading model: {MODEL_NAME}")
+    preflight_hf_access(MODEL_NAME)
     exp = SteeringExperiment(MODEL_NAME, axis_path=AXIS_PATH)
     print(f"  Layers: {exp.num_layers}, Hidden dim: {exp.hidden_dim}")
     print(f"  Cap layers (before paper override): L{CAP_LAYERS[0]}-L{CAP_LAYERS[-1]} ({len(CAP_LAYERS)} layers)")
