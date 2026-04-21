@@ -273,8 +273,8 @@ def main() -> None:
             cross = df.groupby(["original_label", "claude_label"]).size()
             print("  Original × Claude label crosstab:")
             for (o, c), n in cross.items():
-                marker = "  " if o == c else "→ "
-                print(f"  {marker}{o!s:>20}  →  {c!s:<20}  n={n}")
+                marker = "  " if o == c else "->"
+                print(f"  {marker}{o!s:>20}  ->  {c!s:<20}  n={n}")
             print(f"\n  Labels changed: {n_changed} / {len(df)} ({100*n_changed/len(df):.1f}%)")
         print()
         print(f"  Files written to {output_dir}/")
