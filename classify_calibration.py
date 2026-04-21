@@ -105,86 +105,27 @@ Rules:
 Answer: [/INST]"""
 
 
-# ── Anthropic backend ───────────────────────────────────────────────────────
+# ── Anthropic backend (Batch API) ───────────────────────────────────────────
+# Submit all pending rows as a single Message Batch. Trades latency (results
+# may take up to 24h, usually much faster) for 50% cheaper tokens and no
+# rate-limit juggling. For 500+ offline calibration judgements this is the
+# right tool -- the sync-per-call async path we had before was wasting both
+# money and throughput.
 
 
-async def judge_one_anthropic(client, row, model, semaphore, retry_decorators):
-    """Send one row to Claude. retry_decorators is a tuple of the imported
-    tenacity helpers (passed in so the imports stay localised)."""
-    from anthropic import APIStatusError
-
-    output_text = str(row.get("baseline_text", ""))[:3000]
-    user_msg = JUDGE_USER_TEMPLATE.format(output=output_text)
-
-    retry, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter, before_sleep_log, transient = retry_decorators
-
-    @retry(
-        retry=retry_if_exception_type(transient),
-        wait=wait_exponential_jitter(initial=4, max=120, jitter=10),
-        stop=stop_after_attempt(8),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True,
-    )
-    async def _call_api():
-        async with semaphore:
-            await asyncio.sleep(0.25)
-            return await client.messages.create(
-                model=model,
-                temperature=0.0,
-                max_tokens=20,
-                system=JUDGE_SYSTEM,
-                messages=[{"role": "user", "content": user_msg}],
-            )
-
-    try:
-        resp = await _call_api()
-        if not resp.content:
-            return "error"
-        label = resp.content[0].text.strip().lower().replace(" ", "_").replace("-", "_")
-        if label not in VALID_LABELS:
-            logger.warning("Unexpected label %r (keeping as-is)", label)
-        return label
-    except transient as e:
-        logger.error("Transient error after retries: %s: %s", type(e).__name__, e)
-        return "error"
-    except APIStatusError as e:
-        logger.error("API error status=%d: %s", e.status_code, e)
-        return "error"
-    except Exception as e:
-        logger.error("Unexpected: %s: %s", type(e).__name__, e)
-        return "error"
-
-
-async def classify_with_anthropic(
+def classify_with_anthropic(
     df: pd.DataFrame,
     output_path: Path,
     model: str,
-    concurrency: int,
+    poll_interval: float = 30.0,
 ) -> pd.DataFrame:
-    """Anthropic backend driver. Imports the SDK lazily so the harmbench
-    backend doesn't need it installed."""
-    from anthropic import (
-        AsyncAnthropic,
-        APIConnectionError,
-        APITimeoutError,
-        InternalServerError,
-        RateLimitError,
-    )
-    from tenacity import (
-        retry,
-        retry_if_exception_type,
-        stop_after_attempt,
-        wait_exponential_jitter,
-        before_sleep_log,
-    )
-
-    transient = (RateLimitError, APITimeoutError, APIConnectionError, InternalServerError)
-    retry_decorators = (
-        retry, retry_if_exception_type, stop_after_attempt,
-        wait_exponential_jitter, before_sleep_log, transient,
-    )
-
-    client = AsyncAnthropic(max_retries=3)
+    """Submit all pending rows to Anthropic's Message Batches API in one
+    submission, poll until complete, write labels back to the DataFrame.
+    Batch cap is 10k requests; we won't approach that with calibration
+    workloads.
+    """
+    from anthropic import Anthropic
+    from anthropic.types.messages.batch_create_params import Request
 
     if "llm_label" not in df.columns:
         df["llm_label"] = pd.NA
@@ -197,37 +138,85 @@ async def classify_with_anthropic(
     )
     pending = df.index[needs_label].tolist()
     logger.info(
-        "Anthropic-judging %d rows (%d already labelled, %d total)",
+        "Anthropic-batch-judging %d rows (%d already labelled, %d total)",
         len(pending), len(df) - len(pending), len(df),
     )
+    if not pending:
+        return df
 
-    semaphore = asyncio.Semaphore(concurrency)
-    batch_size = 50
-    for start in range(0, len(pending), batch_size):
-        batch_idx = pending[start : start + batch_size]
-        tasks = [
-            judge_one_anthropic(client, df.loc[i], model, semaphore, retry_decorators)
-            for i in batch_idx
-        ]
-        labels = await asyncio.gather(*tasks)
+    client = Anthropic(max_retries=3)
 
-        for i, lbl in zip(batch_idx, labels):
-            df.at[i, "llm_label"] = lbl
-            df.at[i, "llm_judge_model"] = model
+    # One Request per pending row. custom_id maps results back to DataFrame
+    # indices when the batch finishes.
+    requests = []
+    for i in pending:
+        output_text = str(df.loc[i].get("baseline_text", ""))[:3000]
+        user_msg = JUDGE_USER_TEMPLATE.format(output=output_text)
+        requests.append(Request(
+            custom_id=f"row-{i}",
+            params={
+                "model": model,
+                "max_tokens": 20,
+                "temperature": 0.0,
+                "system": JUDGE_SYSTEM,
+                "messages": [{"role": "user", "content": user_msg}],
+            },
+        ))
 
-        counts = {}
-        for lbl in labels:
-            counts[lbl] = counts.get(lbl, 0) + 1
-        done = len(df) - len(pending) + start + len(batch_idx)
-        logger.info(
-            "Progress: %d / %d  (batch: %s)",
-            done, len(df), dict(sorted(counts.items(), key=lambda x: -x[1])),
-        )
+    batch = client.messages.batches.create(requests=requests)
+    logger.info(
+        "Submitted batch id=%s  status=%s  requests=%d",
+        batch.id, batch.processing_status, len(requests),
+    )
 
-        df.to_csv(output_path, index=False)
-        if start + len(batch_idx) < len(pending):
-            await asyncio.sleep(3.0)
+    # Poll. Log whenever the per-status counts change so long runs aren't opaque.
+    import time
+    last_key = None
+    while batch.processing_status == "in_progress":
+        time.sleep(poll_interval)
+        batch = client.messages.batches.retrieve(batch.id)
+        c = batch.request_counts
+        key = (c.processing, c.succeeded, c.errored, c.canceled, c.expired)
+        if key != last_key:
+            logger.info(
+                "Batch %s: processing=%d succeeded=%d errored=%d canceled=%d expired=%d",
+                batch.id, c.processing, c.succeeded, c.errored, c.canceled, c.expired,
+            )
+            last_key = key
 
+    logger.info("Batch %s ended with status=%s. Fetching results.", batch.id, batch.processing_status)
+
+    # Stream results into the DataFrame. Batch is atomic -- no partial
+    # results to protect, so a single save at the end is fine.
+    counts: dict[str, int] = {}
+    for result in client.messages.batches.results(batch.id):
+        try:
+            idx = int(result.custom_id.split("-", 1)[1])
+        except (ValueError, IndexError):
+            logger.warning("Skipping result with unparseable custom_id=%r", result.custom_id)
+            continue
+
+        if result.result.type == "succeeded":
+            msg = result.result.message
+            if msg.content:
+                label = msg.content[0].text.strip().lower().replace(" ", "_").replace("-", "_")
+                if label not in VALID_LABELS:
+                    logger.warning("Unexpected label %r for row %d (keeping as-is)", label, idx)
+            else:
+                label = "error"
+        else:
+            label = "error"
+            logger.error(
+                "Row %d result.type=%s  error=%s",
+                idx, result.result.type, getattr(result.result, "error", None),
+            )
+
+        df.at[idx, "llm_label"] = label
+        df.at[idx, "llm_judge_model"] = model
+        counts[label] = counts.get(label, 0) + 1
+
+    df.to_csv(output_path, index=False)
+    logger.info("Batch results written. Counts: %s", counts)
     return df
 
 
@@ -393,9 +382,9 @@ def main() -> None:
         if not os.environ.get("ANTHROPIC_API_KEY"):
             print("ANTHROPIC_API_KEY is not set. Set it in env or run via build_calibration.sh.")
             sys.exit(1)
-        df = asyncio.run(
-            classify_with_anthropic(df, labeled_path, args.judge_model, args.concurrency)
-        )
+        # Batch API is synchronous at the submit/poll level; no asyncio.run.
+        # --concurrency is unused by this backend (Anthropic handles batching).
+        df = classify_with_anthropic(df, labeled_path, args.judge_model)
 
     df.to_csv(labeled_path, index=False)
     logger.info("Saved labeled data to %s", labeled_path)
