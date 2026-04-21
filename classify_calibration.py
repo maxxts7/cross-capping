@@ -113,16 +113,26 @@ Answer: [/INST]"""
 # money and throughput.
 
 
+BATCH_ID_FILE = "anthropic_batch.id"
+
+
 def classify_with_anthropic(
     df: pd.DataFrame,
     output_path: Path,
     model: str,
     poll_interval: float = 30.0,
+    resume_batch_id: str | None = None,
 ) -> pd.DataFrame:
     """Submit all pending rows to Anthropic's Message Batches API in one
     submission, poll until complete, write labels back to the DataFrame.
     Batch cap is 10k requests; we won't approach that with calibration
     workloads.
+
+    Resume behaviour: after submission the batch id is written to
+    <output_dir>/anthropic_batch.id. On subsequent invocations this file
+    is auto-picked-up and the run skips submission + polls the existing
+    batch. Pass resume_batch_id to override the file. The state file is
+    deleted once the batch finishes and results are written back.
     """
     from anthropic import Anthropic
     from anthropic.types.messages.batch_create_params import Request
@@ -137,37 +147,57 @@ def classify_with_anthropic(
         | (df["llm_label"] == "error")
     )
     pending = df.index[needs_label].tolist()
-    logger.info(
-        "Anthropic-batch-judging %d rows (%d already labelled, %d total)",
-        len(pending), len(df) - len(pending), len(df),
-    )
-    if not pending:
-        return df
 
     client = Anthropic(max_retries=3)
+    output_dir = output_path.parent
+    batch_id_path = output_dir / BATCH_ID_FILE
 
-    # One Request per pending row. custom_id maps results back to DataFrame
-    # indices when the batch finishes.
-    requests = []
-    for i in pending:
-        output_text = str(df.loc[i].get("baseline_text", ""))[:3000]
-        user_msg = JUDGE_USER_TEMPLATE.format(output=output_text)
-        requests.append(Request(
-            custom_id=f"row-{i}",
-            params={
-                "model": model,
-                "max_tokens": 20,
-                "temperature": 0.0,
-                "system": JUDGE_SYSTEM,
-                "messages": [{"role": "user", "content": user_msg}],
-            },
-        ))
+    # Resolve resume source: explicit arg > state file > fresh submission.
+    if resume_batch_id:
+        batch_id = resume_batch_id
+        logger.info("Resuming from explicit --batch-id %s", batch_id)
+    elif batch_id_path.exists():
+        batch_id = batch_id_path.read_text().strip()
+        logger.info("Resuming from state file %s (batch_id=%s)", batch_id_path, batch_id)
+    else:
+        batch_id = None
 
-    batch = client.messages.batches.create(requests=requests)
-    logger.info(
-        "Submitted batch id=%s  status=%s  requests=%d",
-        batch.id, batch.processing_status, len(requests),
-    )
+    if batch_id:
+        batch = client.messages.batches.retrieve(batch_id)
+        logger.info("Retrieved batch id=%s status=%s", batch.id, batch.processing_status)
+    else:
+        # Fresh submit: one Request per pending row. custom_id maps results
+        # back to DataFrame indices when the batch finishes.
+        logger.info(
+            "Anthropic-batch-judging %d rows (%d already labelled, %d total)",
+            len(pending), len(df) - len(pending), len(df),
+        )
+        if not pending:
+            return df
+
+        requests = []
+        for i in pending:
+            output_text = str(df.loc[i].get("baseline_text", ""))[:3000]
+            user_msg = JUDGE_USER_TEMPLATE.format(output=output_text)
+            requests.append(Request(
+                custom_id=f"row-{i}",
+                params={
+                    "model": model,
+                    "max_tokens": 20,
+                    "temperature": 0.0,
+                    "system": JUDGE_SYSTEM,
+                    "messages": [{"role": "user", "content": user_msg}],
+                },
+            ))
+
+        batch = client.messages.batches.create(requests=requests)
+        # Persist immediately so an interrupt before poll completes is resumable.
+        output_dir.mkdir(parents=True, exist_ok=True)
+        batch_id_path.write_text(batch.id)
+        logger.info(
+            "Submitted batch id=%s  status=%s  requests=%d  (id saved to %s)",
+            batch.id, batch.processing_status, len(requests), batch_id_path,
+        )
 
     # Poll. Log whenever the per-status counts change so long runs aren't opaque.
     import time
@@ -216,6 +246,10 @@ def classify_with_anthropic(
         counts[label] = counts.get(label, 0) + 1
 
     df.to_csv(output_path, index=False)
+    # Batch fully consumed -- clear the resume pointer so the next run
+    # submits fresh instead of re-polling a completed batch.
+    if batch_id_path.exists():
+        batch_id_path.unlink()
     logger.info("Batch results written. Counts: %s", counts)
     return df
 
@@ -347,6 +381,12 @@ def main() -> None:
         help=f"HarmBench classifier ID (default: {HARMBENCH_DEFAULT_MODEL}).",
     )
     parser.add_argument(
+        "--batch-id", type=str, default=None,
+        help="Explicit Anthropic batch ID to resume polling instead of "
+             "submitting a new one. If omitted, the script auto-picks up "
+             "<output-dir>/anthropic_batch.id if present, else submits fresh.",
+    )
+    parser.add_argument(
         "--concurrency", type=int, default=2,
         help="Max concurrent API calls (only used when --backend=anthropic).",
     )
@@ -384,7 +424,10 @@ def main() -> None:
             sys.exit(1)
         # Batch API is synchronous at the submit/poll level; no asyncio.run.
         # --concurrency is unused by this backend (Anthropic handles batching).
-        df = classify_with_anthropic(df, labeled_path, args.judge_model)
+        df = classify_with_anthropic(
+            df, labeled_path, args.judge_model,
+            resume_batch_id=args.batch_id,
+        )
 
     df.to_csv(labeled_path, index=False)
     logger.info("Saved labeled data to %s", labeled_path)
