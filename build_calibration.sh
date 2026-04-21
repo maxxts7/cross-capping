@@ -34,7 +34,7 @@ SOURCE="${1:-both}"
 N_PROMPTS="${2:-200}"
 BACKEND="${3:-anthropic}"
 MODEL="meta-llama/Llama-3.3-70B-Instruct"
-OUTPUT_DIR="data/outcome_labeled_${SOURCE}_n${N_PROMPTS}_${BACKEND}"
+OUTPUT_DIR="outcome_labeled_${SOURCE}_n${N_PROMPTS}_${BACKEND}"
 
 if [ "$BACKEND" = "anthropic" ]; then
     # API key resolution: override constant -> existing env -> .env -> prompt.
