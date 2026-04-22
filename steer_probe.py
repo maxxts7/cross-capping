@@ -9,13 +9,11 @@ if below" logic. Just:
 
     h <- h + (target - dot(h, v)) * v
 
-Default prompt set is 10 held-out HARMFUL prompts from WildJailbreak eval
-(5 bare goals via the `vanilla` field, 5 adversarial wrappers via `goal`).
-All disjoint from the compliance-axis calibration pool. The question: for
-prompts the model COMPLIES with at baseline, does steering to high target
-produce refusal? That tells us how far along the axis the "refusal basin"
-starts, and whether cross-cap's optimal75 threshold was simply too low to
-engage it.
+Default prompt set is 10 HARMFUL prompts (5 JailbreakBench bare goals +
+5 WildJailbreak eval adversarial wrappers). The question: for prompts the
+model COMPLIES with at baseline, does steering to high target produce
+refusal? That tells us how far along the axis the "refusal basin" starts,
+and whether cross-cap's optimal75 threshold was simply too low to engage it.
 
 Two modes:
 
@@ -56,12 +54,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Default prompt set: 10 harmful prompts from WildJailbreak eval -- 5 bare
-# (`vanilla` field) and 5 wrapped (`goal` field). All held out from the
-# compliance-axis calibration pool (JBB + WildJailbreak train), so the probe
-# tests on prompts the axis has never seen.
+# Default prompt set: 10 harmful prompts -- 5 bare goals from JailbreakBench
+# and 5 adversarial wrappers from WildJailbreak eval. JBB is held out from
+# Llama's calibration (which uses Compliant-refusal/, not JBB); the WJ eval
+# split is disjoint from the WJ train split used in calibration.
 #
-# Convention: indices 0-4 are bare harmful goals, 5-9 are adversarial
+# Convention: indices 0-4 are JBB bare goals, 5-9 are WildJailbreak eval
 # wrappers. See default_harmful_prompts() below.
 #
 # Lazy-loaded at runtime -- the HF datasets pull adds ~15s the first time.
@@ -69,16 +67,19 @@ DEFAULT_PROMPTS = None  # sentinel; see default_harmful_prompts()
 
 
 def default_harmful_prompts(n_per_source: int = 5) -> list[str]:
-    """Load 10 held-out harmful prompts from WildJailbreak eval split.
-
-    First `n_per_source` rows contribute their bare `vanilla` field (close to
-    JBB-style bare goals but from a different split). Next `n_per_source`
-    rows contribute their wrapped `goal` field (adversarial jailbreaks).
-    All rows are held out from the compliance-axis calibration pool.
+    """Load `n_per_source` bare goals from JailbreakBench and `n_per_source`
+    adversarial wrappers from WildJailbreak eval. Returns a flat list with
+    JBB first, WJ second so indices map to source.
     """
-    rows = run_crosscap.load_jailbreak_dataset(n_prompts=2 * n_per_source)
-    bare = [r["vanilla"] for r in rows[:n_per_source] if r.get("vanilla")]
-    wrapped = [r["goal"] for r in rows[n_per_source:2 * n_per_source]]
+    bare = list(run_crosscap.load_jbb_behaviors(n_prompts=n_per_source))
+    wj_rows = run_crosscap.load_jailbreak_dataset(n_prompts=n_per_source)
+    wrapped = [r["goal"] for r in wj_rows]
+    if len(bare) < n_per_source:
+        logger.warning("JBB returned %d of %d requested bare goals",
+                       len(bare), n_per_source)
+    if len(wrapped) < n_per_source:
+        logger.warning("WJ eval returned %d of %d requested wrappers",
+                       len(wrapped), n_per_source)
     return bare + wrapped
 
 
