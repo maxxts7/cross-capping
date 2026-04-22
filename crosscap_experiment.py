@@ -76,6 +76,7 @@ run_crosscap.py is the person using the tools.
 """
 
 import logging
+import os
 import time
 import torch
 import torch.nn as nn
@@ -347,10 +348,14 @@ class SteeringExperiment:
         # which is the known-good path. Avoids from_pretrained's internal
         # download stalling on some envs (missing hf_transfer, partial resume
         # state). Once the cache is populated, from_pretrained just reads.
-        snapshot_download(
-            repo_id=model_name,
-            ignore_patterns=["*.bin", "*.bin.index.json", "*.pth", "*.pt"],
-        )
+        # Skip the pre-fetch if model_name points to a local directory
+        # (already downloaded or custom checkpoint) -- snapshot_download only
+        # accepts HF repo IDs, and from_pretrained reads the local path directly.
+        if not os.path.isdir(model_name):
+            snapshot_download(
+                repo_id=model_name,
+                ignore_patterns=["*.bin", "*.bin.index.json", "*.pth", "*.pt"],
+            )
         model_kwargs = dict(dtype=dtype, device_map="auto", attn_implementation="flash_attention_2")
         self.model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
         self.model.eval()                        # inference mode -- no gradient tracking
