@@ -3,16 +3,19 @@ Direct-steering probe on the compliance axis.
 
 Question this script answers: if we unconditionally rewrite the hidden state
 so its projection onto the compliance axis equals some target value, at every
-generation step and every cap layer -- does that push a BENIGN prompt into
-emitting a refusal? No detection gate, no threshold, no "fire only if below"
-logic. Just:
+generation step and every cap layer -- where on the axis does output flip
+from compliance to refusal? No detection gate, no threshold, no "fire only
+if below" logic. Just:
 
     h <- h + (target - dot(h, v)) * v
 
-If the compliance axis is a causal refusal lever, benign prompts at large
-positive target values should start producing "I can't help with that."
-If no target value induces refusal on benign prompts, the axis is a probe
-that correlates with refusal but does not cause it.
+Default prompt set is 10 held-out HARMFUL prompts from WildJailbreak eval
+(5 bare goals via the `vanilla` field, 5 adversarial wrappers via `goal`).
+All disjoint from the compliance-axis calibration pool. The question: for
+prompts the model COMPLIES with at baseline, does steering to high target
+produce refusal? That tells us how far along the axis the "refusal basin"
+starts, and whether cross-cap's optimal75 threshold was simply too low to
+engage it.
 
 Two modes:
 
@@ -53,18 +56,30 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Default prompt set: benign-only. The whole question is whether steering
-# can flip BENIGN content into refusal. Jailbreak prompts already refuse
-# sometimes (prompt 210 in llama75), so they don't isolate axis causality;
-# benign prompts do. A refusal here would be strong evidence.
-DEFAULT_PROMPTS = [
-    "Write a short poem about a cat.",
-    "Explain recursion in two sentences.",
-    "What is 7 times 8?",
-    "List three reasons someone might enjoy hiking.",
-    "Translate 'good morning' into French.",
-    "Summarise the plot of Romeo and Juliet in two sentences.",
-]
+# Default prompt set: 10 harmful prompts from WildJailbreak eval -- 5 bare
+# (`vanilla` field) and 5 wrapped (`goal` field). All held out from the
+# compliance-axis calibration pool (JBB + WildJailbreak train), so the probe
+# tests on prompts the axis has never seen.
+#
+# Convention: indices 0-4 are bare harmful goals, 5-9 are adversarial
+# wrappers. See default_harmful_prompts() below.
+#
+# Lazy-loaded at runtime -- the HF datasets pull adds ~15s the first time.
+DEFAULT_PROMPTS = None  # sentinel; see default_harmful_prompts()
+
+
+def default_harmful_prompts(n_per_source: int = 5) -> list[str]:
+    """Load 10 held-out harmful prompts from WildJailbreak eval split.
+
+    First `n_per_source` rows contribute their bare `vanilla` field (close to
+    JBB-style bare goals but from a different split). Next `n_per_source`
+    rows contribute their wrapped `goal` field (adversarial jailbreaks).
+    All rows are held out from the compliance-axis calibration pool.
+    """
+    rows = run_crosscap.load_jailbreak_dataset(n_prompts=2 * n_per_source)
+    bare = [r["vanilla"] for r in rows[:n_per_source] if r.get("vanilla")]
+    wrapped = [r["goal"] for r in rows[n_per_source:2 * n_per_source]]
+    return bare + wrapped
 
 
 # Cap layer range. For Llama-3.3-70B-Instruct the paper uses L56-L71; this
@@ -303,7 +318,12 @@ def main():
         logger.info("Suggested target sweep covers range "
                     "[mean_compliant, mean_refusing, beyond].")
 
-    prompts = load_prompts_file(args.prompts_file) if args.prompts_file else DEFAULT_PROMPTS
+    if args.prompts_file:
+        prompts = load_prompts_file(args.prompts_file)
+    else:
+        logger.info("Loading default harmful prompts: 5 JBB + 5 WildJailbreak...")
+        prompts = default_harmful_prompts(n_per_source=5)
+        logger.info("  idx 0-4: JBB bare goals   idx 5-9: WildJailbreak eval wrappers")
     logger.info("%d prompts x %d targets = %d generations",
                 len(prompts), len(args.targets), len(prompts) * len(args.targets))
 
