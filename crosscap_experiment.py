@@ -83,7 +83,7 @@ import numpy as np
 from tqdm import tqdm                       # progress bars
 from contextlib import ExitStack            # manages multiple context-manager hooks at once
 from typing import Optional
-from huggingface_hub import hf_hub_download # download pre-computed axis files from HF
+from huggingface_hub import hf_hub_download, snapshot_download # download pre-computed axis files from HF
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
@@ -343,6 +343,14 @@ class SteeringExperiment:
         # flash_attention_2 is a fast attention implementation that saves memory.
         logger.info("Loading model %s (dtype=%s, device_map=auto)...", model_name, dtype)
         t0 = time.time()
+        # Pre-fetch shards via snapshot_download -- matches download_model.sh,
+        # which is the known-good path. Avoids from_pretrained's internal
+        # download stalling on some envs (missing hf_transfer, partial resume
+        # state). Once the cache is populated, from_pretrained just reads.
+        snapshot_download(
+            repo_id=model_name,
+            ignore_patterns=["*.bin", "*.bin.index.json", "*.pth", "*.pt"],
+        )
         model_kwargs = dict(dtype=dtype, device_map="auto", attn_implementation="flash_attention_2")
         self.model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
         self.model.eval()                        # inference mode -- no gradient tracking

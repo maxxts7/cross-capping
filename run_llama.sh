@@ -31,6 +31,11 @@
 
 set -e
 
+# Enable the fast Rust-based HF downloader. Without this, 70B shard pulls
+# fall back to the slow single-threaded path and look stuck for minutes.
+# hf_transfer must be installed in the active Python env (pip install hf_transfer).
+export HF_HUB_ENABLE_HF_TRANSFER=1
+
 # Paste your key between the quotes for unattended runs. Leave empty to
 # fall back to env var / .env / interactive prompt. Don't commit a real
 # key -- this file is tracked in git. Only used by the reclassify step
