@@ -47,7 +47,7 @@ if [ "$MODE" = "pca" ] || [ "$MODE" = "mean_diff" ]; then
         --model "$MODEL" \
         --axis-method "$AXIS_METHOD" \
         --calibration-dir "$CALIBRATION_DIR" \
-        --targets "$TARGETS" \
+        --targets="$TARGETS" \
         --output-dir "$OUTPUT_DIR" \
         --include-baseline
 elif [ "$MODE" = "reuse" ]; then
@@ -64,7 +64,7 @@ elif [ "$MODE" = "reuse" ]; then
     python steer_probe.py \
         --axes-path "$AXES_PATH" \
         --model "$MODEL" \
-        --targets "$TARGETS" \
+        --targets="$TARGETS" \
         --output-dir "$OUTPUT_DIR" \
         --include-baseline
 else
