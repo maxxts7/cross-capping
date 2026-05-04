@@ -717,6 +717,10 @@ def save_results(df, output_dir, args, cos_val, cfg, elapsed, cap_layers, cross_
         "axis_method": cfg.get("AXIS_METHOD", "pca"),
         "calibration_source": cfg.get("CALIBRATION_DIR") or "default (JBB + WildJailbreak train)",
         "cross_only": cross_only,
+        "compliance_layers_override": (
+            f"L{cfg['COMPLIANCE_LAYERS_OVERRIDE'][0]}-L{cfg['COMPLIANCE_LAYERS_OVERRIDE'][1]}"
+            if cfg.get("COMPLIANCE_LAYERS_OVERRIDE") else None
+        ),
     }
     with open(output_dir / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
@@ -1020,8 +1024,32 @@ def _compute_warmup_state(exp, cfg) -> dict:
     assistant_axes, assistant_taus, original_cap_layers = load_original_capping(MODEL_NAME)
     # Use whatever the original paper published (local; avoids mutating the
     # module-level CAP_LAYERS and silently leaking to other call paths).
+    paper_cap_layers = list(original_cap_layers)
     cap_layers = list(original_cap_layers)
     print(f"  Cap layers from original paper: L{cap_layers[0]}-L{cap_layers[-1]}")
+
+    # Optional override: extend the cross-cap (Mode 3) compliance range to
+    # include layers outside the paper's published range. The paper's
+    # assistant axis only covers paper_cap_layers, so at the extra layers we
+    # have no detection axis -- handled below by setting tau_detect=+inf at
+    # those layers (always-pass gate) and substituting the compliance axis
+    # in the assistant_axes slot so unit-norm assertions still hold. The
+    # diagnostic projections, cos, and cross-detect calibration loop already
+    # iterate cap_layers, so they pick up the broader range automatically.
+    override = cfg.get("COMPLIANCE_LAYERS_OVERRIDE")
+    if override is not None:
+        lo, hi = override
+        cap_layers = list(range(lo, hi + 1))
+        extra_layers = [li for li in cap_layers if li not in paper_cap_layers]
+        print(
+            f"  Compliance-layer override: L{cap_layers[0]}-L{cap_layers[-1]} "
+            f"({len(extra_layers)} extras outside paper's range: "
+            f"{extra_layers[:8]}{'...' if len(extra_layers) > 8 else ''})"
+        )
+        print(
+            "  At extra layers: detect tau will be set to +inf (gate always "
+            "passes); cross-cap fires whenever compliance < tau_correct."
+        )
 
     # Step 2: Build the compliance axis.
     # Default sources: JBB-Behaviors (refusing) + WJ train adversarial_harmful
@@ -1085,6 +1113,19 @@ def _compute_warmup_state(exp, cfg) -> dict:
             exp, compliance_axes, calibration,
             refusing_acts, compliant_acts, cap_layers,
         )
+
+    # Fill placeholder assistant axes for any cap layer outside the paper's
+    # published range. We can't get the paper's tuned detection axis there,
+    # so we substitute the compliance axis (already unit-norm, satisfies the
+    # _CrossAxisCappingHook assertion) and set the detect tau to +inf below
+    # so the gate always passes at those layers. Diagnostic projections that
+    # iterate cap_layers (cos, calibration, etc.) still get a meaningful
+    # assistant_axes[li] entry to operate on.
+    if override is not None:
+        for li in cap_layers:
+            if li not in assistant_axes:
+                assistant_axes[li] = compliance_axes[li]
+                assistant_taus[li] = float("inf")
 
     # Signal 4: cos(compliance, assistant) at every cap layer, not just the
     # last. Tells us whether the unsupervised PCA axis agrees with the
@@ -1166,11 +1207,27 @@ def _compute_warmup_state(exp, cfg) -> dict:
         assistant_axes, cap_layers,
         method=cross_detect_method,
     )
+    # At override layers, the compute_cross_detect_thresholds output is on
+    # the compliance axis (the placeholder we substituted) and meaningless
+    # as a detect threshold. Replace with +inf so the gate always opens; the
+    # cross-cap fires solely on the compliance correction at those layers.
+    if override is not None:
+        for li in cap_layers:
+            if li not in paper_cap_layers:
+                cross_detect_taus[li] = float("inf")
     print("Cross-cap detection thresholds (paper tau -> new tau), per layer:")
     for li in cap_layers:
         s = cross_detect_stats[li]
-        print(f"  L{li}: paper={assistant_taus[li]:.2f}  new={cross_detect_taus[li]:.2f}  "
-              f"benign={s['mean_benign']:.2f}+/-{s['std_benign']:.2f}")
+        paper_tau = assistant_taus[li]
+        new_tau = cross_detect_taus[li]
+        is_extra = override is not None and li not in paper_cap_layers
+        marker = "  [override: detect always passes]" if is_extra else ""
+        paper_str = "+inf" if paper_tau == float("inf") else f"{paper_tau:.2f}"
+        new_str = "+inf" if new_tau == float("inf") else f"{new_tau:.2f}"
+        print(
+            f"  L{li}: paper={paper_str}  new={new_str}  "
+            f"benign={s['mean_benign']:.2f}+/-{s['std_benign']:.2f}{marker}"
+        )
 
     return {
         "cap_layers": cap_layers,                    # authoritative layer list for chunk/merge
@@ -1468,6 +1525,16 @@ def main():
         cfg["AXIS_METHOD"] = args.axis_method           # override preset's AXIS_METHOD
     if args.n_detect_cal is not None:
         cfg["N_DETECT_CAL"] = args.n_detect_cal
+    if args.compliance_layers:
+        lo, hi = map(int, args.compliance_layers.split("-"))
+        if lo > hi:
+            raise ValueError(f"--compliance-layers '{args.compliance_layers}': start > end")
+        cfg["COMPLIANCE_LAYERS_OVERRIDE"] = (lo, hi)
+        # Mode 2 (assistant-cap) would become a hybrid baseline at extra
+        # layers (paper axis upstairs, compliance placeholder downstairs).
+        # That's not a clean comparison, so skip it whenever the override
+        # is in play and only run the baseline + cross-cap.
+        cfg["CROSS_ONLY"] = True
 
     # CALIBRATION_PROMPTS is the benign source for detect-tau. Cap n_detect_cal
     # at what's actually available so we don't silently pad.
@@ -1530,6 +1597,18 @@ def parse_args():
     parser.add_argument(
         "--cap-layers", type=str, default=None, metavar="START-END",
         help="Override CAP_LAYERS range, e.g. '33-39' for layers 33 through 38",
+    )
+    parser.add_argument(
+        "--compliance-layers", type=str, default=None, metavar="START-END",
+        help="Extend the cross-cap (Mode 3) compliance range to include "
+             "layers outside the paper's published assistant axis. e.g. "
+             "'40-70' covers L40 through L70 inclusive. The compliance axis "
+             "is built fresh on this range; at layers outside the paper's "
+             "range, the assistant detect tau is forced to +inf so the gate "
+             "always passes -- cross-cap fires whenever the compliance "
+             "projection drops below tau_correct. Mode 2 (assistant-cap) "
+             "still iterates these layers, so consider --cross-only if you "
+             "want to skip the hybrid Mode 2 baseline.",
     )
     parser.add_argument(
         "--compliance-threshold", type=str, default="optimal75",

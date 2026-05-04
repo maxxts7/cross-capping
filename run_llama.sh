@@ -24,12 +24,16 @@
 #   ./run_llama.sh full optimal75 benign-p1 no                # skip reclassify step
 #   ./run_llama.sh sanity optimal75 benign-p10 yes mean_diff  # mean-diff axis
 #   ./run_llama.sh full 16                                    # literal tau=16 on every layer
+#   ./run_llama.sh full 16 benign-p1 yes pca 40-70            # cross-cap over L40-L70
 #
 # Compliance threshold options:  optimal75 (default), optimal, optimal90, optimal20, mean+std, mean, p25,
 #                                 OR a literal number (e.g. 16) -> used as tau on every cap layer
 # Cross-detect method options:   benign-p1 (default), benign-p5, benign-p10
 # Reclassify options:            yes (default), no
 # Axis method options:           pca (default), mean_diff
+# Compliance-layer override:     unset (use paper L56-L71) or START-END (e.g. 40-70 inclusive).
+#                                 Extends Mode 3 compliance correction to those layers; at layers
+#                                 outside the paper's range, detect gate always passes.
 
 set -e
 
@@ -49,8 +53,13 @@ THRESHOLD="${2:-optimal75}"
 CROSS_DETECT="${3:-benign-p1}"
 RECLASSIFY="${4:-yes}"
 AXIS_METHOD="${5:-pca}"
+COMPLIANCE_LAYERS="${6:-}"
 MODEL="meta-llama/Llama-3.3-70B-Instruct"
-OUTPUT_DIR="results/crosscap_llama_${PRESET}_${THRESHOLD}_${CROSS_DETECT}_${AXIS_METHOD}"
+LAYER_TAG=""
+if [ -n "$COMPLIANCE_LAYERS" ]; then
+    LAYER_TAG="_L${COMPLIANCE_LAYERS}"
+fi
+OUTPUT_DIR="results/crosscap_llama_${PRESET}_${THRESHOLD}_${CROSS_DETECT}_${AXIS_METHOD}${LAYER_TAG}"
 
 # API key resolution for the reclassify step. Captured upfront so the long
 # generation can run unattended; benign reclassify needs it at the end.
@@ -97,6 +106,10 @@ echo "  Preset:               ${PRESET}"
 echo "  Compliance threshold: ${THRESHOLD}"
 echo "  Cross-detect method:  ${CROSS_DETECT}"
 echo "  Axis method:          ${AXIS_METHOD}"
+echo "  Compliance layers:    ${COMPLIANCE_LAYERS:-paper default (L56-L71)}"
+if [ -n "$COMPLIANCE_LAYERS" ]; then
+    echo "  Mode 2 (assistant-cap): SKIPPED (--compliance-layers triggers --cross-only)"
+fi
 echo "  Calibration:          ${CALIB_INFO}"
 echo "  Reclassify:           ${RECLASSIFY}"
 echo "  Anthropic key:        ${KEY_INFO}"
@@ -104,13 +117,19 @@ echo "  Output:               ${OUTPUT_DIR}"
 echo "============================================"
 echo ""
 
+EXTRA_ARGS=()
+if [ -n "$COMPLIANCE_LAYERS" ]; then
+    EXTRA_ARGS+=(--compliance-layers "$COMPLIANCE_LAYERS")
+fi
+
 python run_crosscap.py \
     --preset "$PRESET" \
     --model "$MODEL" \
     --compliance-threshold "$THRESHOLD" \
     --cross-detect-method "$CROSS_DETECT" \
     --axis-method "$AXIS_METHOD" \
-    --output-dir "$OUTPUT_DIR"
+    --output-dir "$OUTPUT_DIR" \
+    "${EXTRA_ARGS[@]}"
 
 if [ "$RECLASSIFY" = "yes" ]; then
     echo ""
