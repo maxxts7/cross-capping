@@ -23,17 +23,18 @@
 #   ./run_llama.sh full mean+std benign-p1                    # tighter detect gate
 #   ./run_llama.sh full optimal75 benign-p1 no                # skip reclassify step
 #   ./run_llama.sh sanity optimal75 benign-p10 yes mean_diff  # mean-diff axis
-#   ./run_llama.sh full 16                                    # literal tau=16 on every layer
-#   ./run_llama.sh full 16 benign-p1 yes pca 40-70            # cross-cap over L40-L70
+#   ./run_llama.sh full 16                                    # literal tau=16, default L40-L70
+#   ./run_llama.sh full optimal75 benign-p1 yes pca ""        # fall back to paper L56-L71 only
+#   ./run_llama.sh full optimal75 benign-p1 yes pca 30-70     # different override range
 #
 # Compliance threshold options:  optimal75 (default), optimal, optimal90, optimal20, mean+std, mean, p25,
 #                                 OR a literal number (e.g. 16) -> used as tau on every cap layer
 # Cross-detect method options:   benign-p1 (default), benign-p5, benign-p10
 # Reclassify options:            yes (default), no
 # Axis method options:           pca (default), mean_diff
-# Compliance-layer override:     unset (use paper L56-L71) or START-END (e.g. 40-70 inclusive).
-#                                 Extends Mode 3 compliance correction to those layers; at layers
-#                                 outside the paper's range, detect gate always passes.
+# Compliance-layer override:     default "40-70" inclusive -- Mode 3 cross-cap extends down to L40
+#                                 (Mode 2 assistant-cap stays on the paper's L56-L71). Pass "" to
+#                                 disable the override and use paper L56-L71 for both modes.
 
 set -e
 
@@ -53,7 +54,9 @@ THRESHOLD="${2:-optimal75}"
 CROSS_DETECT="${3:-benign-p1}"
 RECLASSIFY="${4:-yes}"
 AXIS_METHOD="${5:-pca}"
-COMPLIANCE_LAYERS="${6:-}"
+# Default cross-cap (Mode 3) range is L40-L70 -- wider than the paper's L56-L71.
+# Pass "" as the 6th arg to fall back to the paper's published range.
+COMPLIANCE_LAYERS="${6-40-70}"
 MODEL="meta-llama/Llama-3.3-70B-Instruct"
 LAYER_TAG=""
 if [ -n "$COMPLIANCE_LAYERS" ]; then
@@ -108,7 +111,7 @@ echo "  Cross-detect method:  ${CROSS_DETECT}"
 echo "  Axis method:          ${AXIS_METHOD}"
 echo "  Compliance layers:    ${COMPLIANCE_LAYERS:-paper default (L56-L71)}"
 if [ -n "$COMPLIANCE_LAYERS" ]; then
-    echo "  Mode 2 (assistant-cap): SKIPPED (--compliance-layers triggers --cross-only)"
+    echo "  Mode 2 (assistant-cap): runs on paper layers (L56-L71); cross-cap (Mode 3) on the override range"
 fi
 echo "  Calibration:          ${CALIB_INFO}"
 echo "  Reclassify:           ${RECLASSIFY}"

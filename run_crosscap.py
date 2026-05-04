@@ -451,7 +451,7 @@ def load_jailbreak_dataset(n_prompts=None):
 def run_experiment(
     exp: SteeringExperiment,             # loaded model + axis
     prompts: list[dict],                 # list of {"idx", "text", "type"} dicts
-    cap_layers: list[int],               # which layers to cap at (e.g. L46-L53)
+    cap_layers: list[int],               # cross-cap (Mode 3) layer range
     assistant_axes: dict[int, torch.Tensor],  # per-layer assistant axis vectors
     compliance_axes: dict[int, torch.Tensor], # per-layer compliance axis vectors
     assistant_taus: dict[int, float],    # paper's tau -- used by Mode 2 (assistant-cap)
@@ -459,6 +459,7 @@ def run_experiment(
     cross_detect_taus: dict[int, float], # data-driven tau -- used by Mode 3 detect gate
     max_new_tokens: int,                 # max tokens to generate per prompt
     cross_only: bool = False,            # if True, skip assistant-axis capping
+    assistant_cap_layers: list[int] | None = None,  # Mode 2 layer range (defaults to cap_layers)
 ) -> tuple[pd.DataFrame, list[dict]]:
     """Run baseline + assistant-cap + cross-cap for each prompt.
 
@@ -470,6 +471,13 @@ def run_experiment(
     """
     rows = []
     traces: list[dict] = []
+
+    # Mode 2 (assistant-cap) iterates assistant_cap_layers when given, else
+    # falls back to cap_layers for old call sites. Mode 3 always uses
+    # cap_layers. Splitting the two lets --compliance-layers widen Mode 3
+    # without disturbing the paper's Mode 2 baseline.
+    if assistant_cap_layers is None:
+        assistant_cap_layers = cap_layers
 
     for i, prompt in enumerate(prompts):
         prompt_text = prompt["text"]
@@ -503,7 +511,7 @@ def run_experiment(
         if not cross_only:
             try:
                 cap_ids, n_cap, cap_active = generate_capped(
-                    exp, input_ids, cap_layers, assistant_axes, assistant_taus,
+                    exp, input_ids, assistant_cap_layers, assistant_axes, assistant_taus,
                     max_new_tokens,
                 )
                 cap_text = exp.tokenizer.decode(
@@ -1230,7 +1238,8 @@ def _compute_warmup_state(exp, cfg) -> dict:
         )
 
     return {
-        "cap_layers": cap_layers,                    # authoritative layer list for chunk/merge
+        "cap_layers": cap_layers,                    # cross-cap (Mode 3) range -- can be widened via --compliance-layers
+        "assistant_cap_layers": paper_cap_layers,    # assistant-cap (Mode 2) range -- always the paper's published layers
         "assistant_axes": assistant_axes,
         "compliance_axes": compliance_axes,
         "assistant_taus": assistant_taus,            # paper's, used by Mode 2
@@ -1336,6 +1345,10 @@ def do_chunk(args, cfg, output_dir):
     # Authoritative cap_layers come from warmup so chunk workers can't drift
     # away from the layers the axes were actually computed on.
     cap_layers = list(state.get("cap_layers", CAP_LAYERS))
+    # Mode 2 stays on the paper's published layers even when the cross-cap
+    # range is widened via --compliance-layers. Old warmup files predate
+    # this split, so fall back to cap_layers for backward compatibility.
+    assistant_cap_layers = list(state.get("assistant_cap_layers", cap_layers))
 
     # Step 2: Load the model (each chunk worker needs its own copy in GPU memory)
     print(f"Loading model: {MODEL_NAME}")
@@ -1363,6 +1376,7 @@ def do_chunk(args, cfg, output_dir):
         assistant_taus, compliance_taus, cross_detect_taus,
         cfg["MAX_NEW_TOKENS"],
         cross_only=cross_only,
+        assistant_cap_layers=assistant_cap_layers,
     )
 
     # Step 5: Save this chunk's results as a CSV + per-token trace pickle
@@ -1475,6 +1489,7 @@ def do_run(args, cfg, output_dir):
         state["assistant_taus"], state["compliance_taus"], state["cross_detect_taus"],
         cfg["MAX_NEW_TOKENS"],
         cross_only=cross_only,
+        assistant_cap_layers=state.get("assistant_cap_layers", state["cap_layers"]),
     )
 
     elapsed = time.time() - t_start
@@ -1530,11 +1545,6 @@ def main():
         if lo > hi:
             raise ValueError(f"--compliance-layers '{args.compliance_layers}': start > end")
         cfg["COMPLIANCE_LAYERS_OVERRIDE"] = (lo, hi)
-        # Mode 2 (assistant-cap) would become a hybrid baseline at extra
-        # layers (paper axis upstairs, compliance placeholder downstairs).
-        # That's not a clean comparison, so skip it whenever the override
-        # is in play and only run the baseline + cross-cap.
-        cfg["CROSS_ONLY"] = True
 
     # CALIBRATION_PROMPTS is the benign source for detect-tau. Cap n_detect_cal
     # at what's actually available so we don't silently pad.
