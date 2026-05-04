@@ -133,12 +133,15 @@ def generate_steered_on_range(
     per_layer_axes: dict[int, torch.Tensor],
     target: float,
     max_new_tokens: int,
+    scope: str = "all",
 ) -> tuple[torch.Tensor, dict[int, list[dict]]]:
     """Apply _SteerToTargetHook at every layer in `layer_range` with the same
     target. Uses each layer's own compliance axis from per_layer_axes.
+    `scope` is forwarded to the hook -- 'all' clamps every forward pass,
+    'prefill_only' clamps only the post-instruction cursor (step 0).
     """
     hooks = [
-        _SteerToTargetHook(exp.layers[li], li, per_layer_axes[li], target)
+        _SteerToTargetHook(exp.layers[li], li, per_layer_axes[li], target, scope=scope)
         for li in layer_range
     ]
     with ExitStack() as stack:
@@ -187,6 +190,16 @@ def main():
     parser.add_argument("--output-dir", default="steer_layer_sweep_results")
     parser.add_argument("--include-baseline", action="store_true",
                         help="Also generate an uncapped baseline per prompt.")
+    parser.add_argument(
+        "--scope", default="all",
+        choices=["all", "prefill_only", "first_token_only", "cursor_plus_first"],
+        help="Where to apply the steering clamp. "
+             "'all' (default) clamps every forward pass -- prefill cursor plus "
+             "every generated token. "
+             "'prefill_only' clamps only the post-instruction cursor (step 0). "
+             "'first_token_only' clamps only the first decoded token (step 1). "
+             "'cursor_plus_first' clamps steps 0 and 1 together.",
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -243,7 +256,7 @@ def main():
         writer = csv.writer(f)
         writer.writerow([
             "prompt_idx", "layer_range", "layer_start", "layer_end",
-            "n_layers", "target", "prompt_text", "steered_text",
+            "n_layers", "target", "scope", "prompt_text", "steered_text",
             "L_first_pre_mean", "L_first_post_mean", "L_first_push_mean",
             "L_last_pre_mean", "L_last_post_mean", "L_last_push_mean",
         ])
@@ -256,7 +269,7 @@ def main():
                 seqs = generate_baseline(exp, input_ids, max_new_tokens=args.max_new_tokens)
                 baseline = decode_new_tokens(exp.tokenizer, seqs, prompt_len)
                 writer.writerow([
-                    pi, "baseline", "", "", "", "baseline", text, baseline,
+                    pi, "baseline", "", "", "", "baseline", "", text, baseline,
                     "", "", "", "", "", "",
                 ])
                 f.flush()
@@ -270,6 +283,7 @@ def main():
                     seqs, per_layer_trace = generate_steered_on_range(
                         exp, input_ids, layer_range, per_layer_axes,
                         target=target, max_new_tokens=args.max_new_tokens,
+                        scope=args.scope,
                     )
                     out = decode_new_tokens(exp.tokenizer, seqs, prompt_len)
 
@@ -287,7 +301,7 @@ def main():
 
                     writer.writerow([
                         pi, range_label, lo, hi, len(layer_range),
-                        f"{target:.2f}", text, out,
+                        f"{target:.2f}", args.scope, text, out,
                         f"{f_pre:.3f}", f"{f_post:.3f}", f"{f_push:.3f}",
                         f"{l_pre:.3f}", f"{l_post:.3f}", f"{l_push:.3f}",
                     ])
@@ -296,6 +310,7 @@ def main():
                         "prompt_idx": pi,
                         "layer_range": (lo, hi),
                         "target": target,
+                        "scope": args.scope,
                         "prompt_len": prompt_len,
                         "per_layer_trace": per_layer_trace,
                     })

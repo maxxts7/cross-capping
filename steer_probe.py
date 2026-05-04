@@ -98,8 +98,25 @@ class _SteerToTargetHook:
 
     Records per-step (step, pre_proj, post_proj, push_applied, norm_pre) so
     we can verify the push was actually applied and measure the delta.
-    post_proj should equal target within floating-point tolerance.
+    post_proj should equal target within floating-point tolerance for steps
+    where the clamp actually fired (see scope below); otherwise post_proj
+    equals pre_proj.
+
+    scope:
+      "all"               -- clamp on every forward pass (prefill + every
+                             decode step). Original behaviour.
+      "prefill_only"      -- clamp only step 0 (the prefill pass, which edits
+                             the post-instruction / pre-generation cursor).
+      "first_token_only"  -- clamp only step 1 (the first decoded assistant
+                             token).
+      "cursor_plus_first" -- clamp steps 0 and 1 (cursor + first decoded
+                             token).
+      In every "*_only" / "cursor_plus_first" scope, all other steps record
+      pre_proj but leave h untouched, so the model is free to drift away
+      from target as generation continues.
     """
+
+    _VALID_SCOPES = ("all", "prefill_only", "first_token_only", "cursor_plus_first")
 
     def __init__(
         self,
@@ -107,11 +124,17 @@ class _SteerToTargetHook:
         layer_idx: int,
         axis: torch.Tensor,
         target: float,
+        scope: str = "all",
     ) -> None:
+        if scope not in self._VALID_SCOPES:
+            raise ValueError(
+                f"scope must be one of {self._VALID_SCOPES}, got {scope!r}"
+            )
         self._layer = layer_module
         self._layer_idx = layer_idx
         self._axis = axis.float()
         self._target = float(target)
+        self._scope = scope
         self._axis_device: torch.Tensor | None = None
         self._handle = None
         self._step = 0
@@ -131,15 +154,29 @@ class _SteerToTargetHook:
             h_last = h[0, -1, :].float()
             pre_proj = (h_last @ axis).item()
             norm_pre = h_last.norm().item()
-            delta = self._target - pre_proj
-            h[0, -1, :].add_(delta * axis.to(h.dtype))
-            post_proj = (h[0, -1, :].float() @ axis).item()
+            if self._scope == "all":
+                should_clamp = True
+            elif self._scope == "prefill_only":
+                should_clamp = self._step == 0
+            elif self._scope == "first_token_only":
+                should_clamp = self._step == 1
+            else:  # "cursor_plus_first"
+                should_clamp = self._step in (0, 1)
+            if should_clamp:
+                delta = self._target - pre_proj
+                h[0, -1, :].add_(delta * axis.to(h.dtype))
+                post_proj = (h[0, -1, :].float() @ axis).item()
+                push_applied = delta
+            else:
+                post_proj = pre_proj
+                push_applied = 0.0
             self.trace.append({
                 "step": self._step,
                 "pre_proj": pre_proj,
                 "post_proj": post_proj,
-                "push_applied": delta,
+                "push_applied": push_applied,
                 "norm_pre": norm_pre,
+                "clamped": should_clamp,
             })
             self._step += 1
 
@@ -163,9 +200,10 @@ def generate_steered(
     per_layer_axes: dict[int, torch.Tensor],
     target: float,
     max_new_tokens: int,
+    scope: str = "all",
 ) -> tuple[torch.Tensor, dict[int, list[dict]]]:
     hooks = [
-        _SteerToTargetHook(exp.layers[li], li, per_layer_axes[li], target)
+        _SteerToTargetHook(exp.layers[li], li, per_layer_axes[li], target, scope=scope)
         for li in cap_layers
     ]
     with ExitStack() as stack:
@@ -287,6 +325,14 @@ def main():
     parser.add_argument("--output-dir", default="steer_probe_results")
     parser.add_argument("--include-baseline", action="store_true",
                         help="Also generate an uncapped baseline for each prompt.")
+    parser.add_argument(
+        "--scope", default="all",
+        choices=["all", "prefill_only", "first_token_only", "cursor_plus_first"],
+        help="Steering scope. 'all' clamps every forward pass; "
+             "'prefill_only' clamps only the post-instruction cursor (step 0); "
+             "'first_token_only' clamps only the first decoded token (step 1); "
+             "'cursor_plus_first' clamps both step 0 and step 1.",
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -335,7 +381,7 @@ def main():
     with open(results_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([
-            "prompt_idx", "target", "prompt_text", "steered_text",
+            "prompt_idx", "target", "scope", "prompt_text", "steered_text",
             "L_first_pre_mean", "L_first_post_mean", "L_first_push_mean",
             "L_last_pre_mean", "L_last_post_mean", "L_last_push_mean",
         ])
@@ -347,7 +393,7 @@ def main():
             if args.include_baseline:
                 seqs = generate_baseline(exp, input_ids, max_new_tokens=args.max_new_tokens)
                 baseline = decode_new_tokens(exp.tokenizer, seqs, prompt_len)
-                writer.writerow([pi, "baseline", text, baseline,
+                writer.writerow([pi, "baseline", "", text, baseline,
                                  "", "", "", "", "", ""])
                 f.flush()
                 logger.info("[%d baseline] %s", pi, baseline[:80].replace("\n", " "))
@@ -356,6 +402,7 @@ def main():
                 seqs, per_layer_trace = generate_steered(
                     exp, input_ids, cap_layers, per_layer_axes,
                     target=target, max_new_tokens=args.max_new_tokens,
+                    scope=args.scope,
                 )
                 out = decode_new_tokens(exp.tokenizer, seqs, prompt_len)
 
@@ -371,7 +418,7 @@ def main():
                 l_pre, l_post, l_push = layer_stats(cap_layers[-1])
 
                 writer.writerow([
-                    pi, f"{target:.2f}", text, out,
+                    pi, f"{target:.2f}", args.scope, text, out,
                     f"{f_pre:.3f}", f"{f_post:.3f}", f"{f_push:.3f}",
                     f"{l_pre:.3f}", f"{l_post:.3f}", f"{l_push:.3f}",
                 ])
@@ -379,6 +426,7 @@ def main():
                 all_traces.append({
                     "prompt_idx": pi,
                     "target": target,
+                    "scope": args.scope,
                     "prompt_len": prompt_len,
                     "per_layer_trace": per_layer_trace,
                 })
