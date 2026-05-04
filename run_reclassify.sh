@@ -49,27 +49,51 @@ fi
 # Anthropic-key resolution. Required when the judge will hit Claude:
 #   - benign files always do
 #   - jailbreak files do too if --backend anthropic
+#
+# We always show the prompt so the key source is explicit on every run.
+# Pressing Enter falls back to the script-pasted override / env / .env;
+# typing a key uses what you typed for this run only (no persistence).
 ANTHROPIC_API_KEY_OVERRIDE=""
+
+EXISTING_KEY=""
 if [ -n "$ANTHROPIC_API_KEY_OVERRIDE" ]; then
-    ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_OVERRIDE"
-fi
-if [ -z "$ANTHROPIC_API_KEY" ] && [ -f .env ]; then
+    EXISTING_KEY="$ANTHROPIC_API_KEY_OVERRIDE"
+    KEY_SOURCE="script override"
+elif [ -n "$ANTHROPIC_API_KEY" ]; then
+    EXISTING_KEY="$ANTHROPIC_API_KEY"
+    KEY_SOURCE="env var"
+elif [ -f .env ]; then
     # shellcheck disable=SC1091
     set -a
     . ./.env
     set +a
-fi
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    printf "Enter ANTHROPIC_API_KEY (hidden, or press Enter to abort): "
-    read -rs ANTHROPIC_API_KEY
-    echo ""
-    if [ -z "$ANTHROPIC_API_KEY" ]; then
-        echo "No key provided -- aborting." >&2
-        exit 1
+    if [ -n "$ANTHROPIC_API_KEY" ]; then
+        EXISTING_KEY="$ANTHROPIC_API_KEY"
+        KEY_SOURCE=".env"
     fi
 fi
+
+if [ -n "$EXISTING_KEY" ]; then
+    printf "ANTHROPIC_API_KEY found (%s, %d chars). Press Enter to use it, " \
+        "$KEY_SOURCE" "${#EXISTING_KEY}"
+    printf "or type a different key (hidden): "
+else
+    printf "Enter ANTHROPIC_API_KEY (hidden, no fallback found -- required): "
+fi
+read -rs ENTERED_KEY
+echo ""
+
+if [ -n "$ENTERED_KEY" ]; then
+    ANTHROPIC_API_KEY="$ENTERED_KEY"
+    KEY_INFO="entered at prompt (${#ANTHROPIC_API_KEY} chars)"
+elif [ -n "$EXISTING_KEY" ]; then
+    ANTHROPIC_API_KEY="$EXISTING_KEY"
+    KEY_INFO="from $KEY_SOURCE (${#ANTHROPIC_API_KEY} chars)"
+else
+    echo "No key provided -- aborting." >&2
+    exit 1
+fi
 export ANTHROPIC_API_KEY
-KEY_INFO="set (${#ANTHROPIC_API_KEY} chars)"
 
 RESUME_FLAG=""
 if [ "$RESUME" = "yes" ]; then
