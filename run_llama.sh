@@ -23,8 +23,10 @@
 #   ./run_llama.sh full mean+std benign-p1                    # tighter detect gate
 #   ./run_llama.sh full optimal75 benign-p1 no                # skip reclassify step
 #   ./run_llama.sh sanity optimal75 benign-p10 yes mean_diff  # mean-diff axis
+#   ./run_llama.sh full 16                                    # literal tau=16 on every layer
 #
-# Compliance threshold options:  optimal75 (default), optimal, optimal90, optimal20, mean+std, mean, p25
+# Compliance threshold options:  optimal75 (default), optimal, optimal90, optimal20, mean+std, mean, p25,
+#                                 OR a literal number (e.g. 16) -> used as tau on every cap layer
 # Cross-detect method options:   benign-p1 (default), benign-p5, benign-p10
 # Reclassify options:            yes (default), no
 # Axis method options:           pca (default), mean_diff
@@ -115,5 +117,5 @@ if [ "$RECLASSIFY" = "yes" ]; then
     echo "── Reclassify (HarmBench for jailbreaks, Claude for benigns) ───────"
     python reclassify_refusals.py \
         --input-dir "$OUTPUT_DIR" \
-        --backend harmbench
+        --backend anthropic
 fi

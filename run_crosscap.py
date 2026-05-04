@@ -609,7 +609,15 @@ def _compliance_tau(stats: dict, method: str) -> float:
 
     On the compliance axis: high = refusing (safe), low = compliant (unsafe).
     Capping fires when projection < tau, so higher tau = more aggressive.
+
+    If `method` parses as a number, that literal value is used as tau on
+    every layer (e.g. --compliance-threshold 16 -> tau=16.0 across the cap
+    range). Useful when you want to mirror a steering target value directly.
     """
+    try:
+        return float(method)
+    except (TypeError, ValueError):
+        pass
     if method == "mean+std":
         return stats["mean_compliant"] + stats["std_compliant"]
     elif method == "optimal":
@@ -1525,8 +1533,9 @@ def parse_args():
     )
     parser.add_argument(
         "--compliance-threshold", type=str, default="optimal75",
-        choices=["mean+std", "optimal", "optimal75", "optimal90", "optimal20", "mean", "p25"],
-        help="Compliance axis threshold method: "
+        help="Compliance axis threshold method, OR a literal number used as "
+             "tau on every cap layer (e.g. --compliance-threshold 16). "
+             "Methods: "
              "optimal75 = alpha=0.75, 3/4 of the way from mean_compliant toward "
              "mean_refusing; stricter floor than optimal (default). "
              "optimal = midpoint (alpha=0.5) between compliant and refusing means. "
