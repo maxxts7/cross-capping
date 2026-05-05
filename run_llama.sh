@@ -55,9 +55,9 @@ export HF_HUB_ENABLE_HF_TRANSFER=1
 # (for benign files; jailbreak files use HarmBench locally).
 ANTHROPIC_API_KEY_OVERRIDE=""
 
-PRESET="${1:-full}"
-THRESHOLD="${2:-optimal75}"
-CROSS_DETECT="${3:-benign-p1}"
+PRESET="${1:-sanity}"
+THRESHOLD="${2:-12}"
+CROSS_DETECT="${3:--8}"
 RECLASSIFY="${4:-yes}"
 AXIS_METHOD="${5:-pca}"
 # Default cross-cap (Mode 3) range is L40-L70 -- wider than the paper's L56-L71.
@@ -65,8 +65,14 @@ AXIS_METHOD="${5:-pca}"
 COMPLIANCE_LAYERS="${6-40-65}"
 # Optional prompt-count overrides. Empty = use the preset's N_PROMPTS /
 # N_BENIGN_EVAL. Useful for ad-hoc subsamples without editing the preset.
-N_JAILBREAK="${7:-}"
-N_BENIGN="${8:-}"
+N_JAILBREAK="${7:-10}"
+N_BENIGN="${8:-10}"
+# Sticky detect (Mode 3): once the assistant-axis projection falls below
+# tau_detect at a given layer, keep that layer's detect gate open for the
+# rest of the generation. The compliance correction gate is still checked
+# every step. Pass "yes" to enable; default "no" preserves the original
+# step-by-step behaviour.
+STICKY_DETECT="${9:-yes}"
 MODEL="meta-llama/Llama-3.3-70B-Instruct"
 LAYER_TAG=""
 if [ -n "$COMPLIANCE_LAYERS" ]; then
@@ -77,7 +83,11 @@ if [ -n "$N_JAILBREAK" ] || [ -n "$N_BENIGN" ]; then
     # Mark the output dir so a 5+5 smoke run doesn't overwrite a 250+100 full run.
     COUNT_TAG="_n${N_JAILBREAK:-preset}-${N_BENIGN:-preset}"
 fi
-OUTPUT_DIR="results/crosscap_llama_${PRESET}_${THRESHOLD}_${CROSS_DETECT}_${AXIS_METHOD}${LAYER_TAG}${COUNT_TAG}"
+STICKY_TAG=""
+if [ "$STICKY_DETECT" = "yes" ]; then
+    STICKY_TAG="_sticky"
+fi
+OUTPUT_DIR="results/crosscap_llama_${PRESET}_${THRESHOLD}_${CROSS_DETECT}_${AXIS_METHOD}${LAYER_TAG}${COUNT_TAG}${STICKY_TAG}"
 
 # API key resolution for the reclassify step. Captured upfront so the long
 # generation can run unattended; benign reclassify needs it at the end.
@@ -130,6 +140,7 @@ if [ -n "$COMPLIANCE_LAYERS" ]; then
 fi
 echo "  N jailbreak:          ${N_JAILBREAK:-preset default}"
 echo "  N benign:             ${N_BENIGN:-preset default}"
+echo "  Sticky detect (M3):   ${STICKY_DETECT}"
 echo "  Calibration:          ${CALIB_INFO}"
 echo "  Reclassify:           ${RECLASSIFY}"
 echo "  Anthropic key:        ${KEY_INFO}"
@@ -146,6 +157,9 @@ if [ -n "$N_JAILBREAK" ]; then
 fi
 if [ -n "$N_BENIGN" ]; then
     EXTRA_ARGS+=(--n-benign "$N_BENIGN")
+fi
+if [ "$STICKY_DETECT" = "yes" ]; then
+    EXTRA_ARGS+=(--sticky-detect)
 fi
 
 python run_crosscap.py \

@@ -460,6 +460,7 @@ def run_experiment(
     max_new_tokens: int,                 # max tokens to generate per prompt
     cross_only: bool = False,            # if True, skip assistant-axis capping
     assistant_cap_layers: list[int] | None = None,  # Mode 2 layer range (defaults to cap_layers)
+    sticky_detect: bool = False,         # latch Mode 3 detect gate per layer once tripped
 ) -> tuple[pd.DataFrame, list[dict]]:
     """Run baseline + assistant-cap + cross-cap for each prompt.
 
@@ -531,6 +532,7 @@ def run_experiment(
                 detect_thresholds=cross_detect_taus,   # data-driven, NOT the paper's
                 correct_thresholds=compliance_taus,
                 max_new_tokens=max_new_tokens,
+                sticky_detect=sticky_detect,
             )
             cross_text = exp.tokenizer.decode(
                 cross_ids[0, prompt_len:], skip_special_tokens=True
@@ -770,6 +772,7 @@ def save_results(
             f"L{cfg['COMPLIANCE_LAYERS_OVERRIDE'][0]}-L{cfg['COMPLIANCE_LAYERS_OVERRIDE'][1]}"
             if cfg.get("COMPLIANCE_LAYERS_OVERRIDE") else None
         ),
+        "sticky_detect": cfg.get("STICKY_DETECT", False),
     }
     with open(output_dir / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
@@ -1434,6 +1437,7 @@ def do_chunk(args, cfg, output_dir):
         cfg["MAX_NEW_TOKENS"],
         cross_only=cross_only,
         assistant_cap_layers=assistant_cap_layers,
+        sticky_detect=cfg.get("STICKY_DETECT", False),
     )
 
     # Step 5: Save this chunk's results as a CSV + per-token trace pickle
@@ -1553,6 +1557,7 @@ def do_run(args, cfg, output_dir):
         cfg["MAX_NEW_TOKENS"],
         cross_only=cross_only,
         assistant_cap_layers=state.get("assistant_cap_layers", state["cap_layers"]),
+        sticky_detect=cfg.get("STICKY_DETECT", False),
     )
 
     elapsed = time.time() - t_start
@@ -1615,6 +1620,7 @@ def main():
         if lo > hi:
             raise ValueError(f"--compliance-layers '{args.compliance_layers}': start > end")
         cfg["COMPLIANCE_LAYERS_OVERRIDE"] = (lo, hi)
+    cfg["STICKY_DETECT"] = bool(args.sticky_detect)
 
     # CALIBRATION_PROMPTS is the benign source for detect-tau. Cap n_detect_cal
     # at what's actually available so we don't silently pad.
@@ -1690,6 +1696,16 @@ def parse_args():
              "projection drops below tau_correct. Mode 2 (assistant-cap) "
              "still iterates these layers, so consider --cross-only if you "
              "want to skip the hybrid Mode 2 baseline.",
+    )
+    parser.add_argument(
+        "--sticky-detect", action="store_true",
+        help="Latch the cross-cap (Mode 3) detect gate per layer once it "
+             "fires. After detect_proj first falls below tau_detect at a "
+             "layer, that layer's gate stays open for the rest of the "
+             "generation regardless of subsequent detect_proj values, so "
+             "the compliance correction is evaluated every step. The "
+             "correction gate (compliance_proj < tau_correct) is still "
+             "checked independently each step. Off by default.",
     )
     parser.add_argument(
         "--compliance-threshold", type=str, default="optimal75",

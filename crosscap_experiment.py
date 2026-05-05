@@ -598,6 +598,7 @@ class _CrossAxisCappingHook:
         correct_axis: torch.Tensor,      # axis used to perform the actual correction
         correct_threshold: float,        # target projection value on the correction axis
         trace_coordinator: Optional["_TraceCoordinator"] = None,
+        sticky_detect: bool = False,     # if True, latch the detect gate once it fires
     ):
         self._layer = layer_module
         self._layer_idx = layer_idx
@@ -610,6 +611,13 @@ class _CrossAxisCappingHook:
         _assert_unit_norm(self._correct_axis, "cross-cap correction axis")
         self._detect_device: Optional[torch.Tensor] = None    # lazily moved to GPU
         self._correct_device: Optional[torch.Tensor] = None
+        # Latched-detect mode: once detect_proj < tau_detect at any step,
+        # set self._detect_latched=True and skip the detect threshold check
+        # for every subsequent step. The compliance correction gate is still
+        # evaluated each step independently. Per-layer (each hook has its
+        # own latch); per-prompt (hooks are recreated per generation).
+        self._sticky_detect = sticky_detect
+        self._detect_latched = False
         self.n_triggered = 0             # detection axis fired (gate opened)
         self.n_corrected = 0             # correction was also needed and applied
         # One event per firing: (step_index, magnitude).
@@ -666,10 +674,16 @@ class _CrossAxisCappingHook:
 
             # --- GATE 1: Detection ---
             # Check the assistant axis: is the model heading toward compliance?
+            # In sticky_detect mode, treat the gate as open if it has ever
+            # opened on a prior step at this layer (per-layer latch).
             fired = False
             push_applied = 0.0
-            if detect_proj < self._tau_detect:
-                self.n_triggered += 1        # yes, detection fired
+            detect_below = detect_proj < self._tau_detect
+            detect_open = detect_below or (self._sticky_detect and self._detect_latched)
+            if detect_open:
+                self.n_triggered += 1        # yes, detection gate is open
+                if self._sticky_detect and detect_below:
+                    self._detect_latched = True
 
                 # --- GATE 2: Correction ---
                 # Now check the *correction* axis: does h also need nudging there?
@@ -696,6 +710,7 @@ class _CrossAxisCappingHook:
                 "norm":                 h_norm,
                 "fired":                fired,
                 "push_applied":         push_applied,
+                "detect_latched":       self._detect_latched,
                 "proj_onto_prev_axes":  proj_onto_prev_axes,
             })
 
@@ -1176,6 +1191,7 @@ def generate_cross_capped(
     detect_thresholds: dict[int, float],          # per-layer thresholds for detection
     correct_thresholds: dict[int, float],         # per-layer thresholds for correction
     max_new_tokens: int = 128,
+    sticky_detect: bool = False,                  # latch detect gate per layer once tripped
 ) -> tuple[
     torch.Tensor, int, int, list[int],
     dict[int, list[tuple[int, float]]],
@@ -1218,6 +1234,7 @@ def generate_cross_capped(
             per_layer_detect_axes[layer_idx], detect_thresholds[layer_idx],  # gate: assistant axis
             correct_axes[layer_idx], correct_thresholds[layer_idx],          # correction: compliance axis
             trace_coordinator=coordinator,
+            sticky_detect=sticky_detect,
         )
         for layer_idx in cap_layers
     ]
