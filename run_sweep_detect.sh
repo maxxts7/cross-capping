@@ -14,22 +14,23 @@
 #
 # Usage:
 #   chmod +x run_sweep_detect.sh
-#   ./run_sweep_detect.sh <output-dir> [taus] [n_jb] [n_bn] [reclassify] [warmup] [model]
+#   ./run_sweep_detect.sh [output-dir] [taus] [n_jb] [n_bn] [reclassify] [warmup] [model]
 #
 # Examples:
-#   ./run_sweep_detect.sh sweep_detect_llama
+#   ./run_sweep_detect.sh                                       # uses sweep_detect_<model>
 #   ./run_sweep_detect.sh sweep_detect_llama "-8,-4,0,4,8,12"
-#   ./run_sweep_detect.sh sweep_detect_llama "-8,0,8,16" 100 100
+#   ./run_sweep_detect.sh "" "-8,0,8,16" 100 100                # default dir, custom taus + sizes
 #   ./run_sweep_detect.sh sweep_detect_llama default 50 50 no
-#   ./run_sweep_detect.sh sweep_detect_qwen default 50 50 yes "" Qwen/Qwen3-32B
+#   ./run_sweep_detect.sh "" default 50 50 yes "" Qwen/Qwen3-32B
 #   ./run_sweep_detect.sh sweep_detect_llama default 50 50 yes llama_full/warmup.pt
 #
-# Args (positional, all but the first optional):
-#   1  OUTPUT_DIR    directory for per-tau results + summary.csv (required)
+# Args (all positional, all optional):
+#   1  OUTPUT_DIR    per-tau results + summary.csv. Defaults to
+#                    sweep_detect_<model-family> (e.g. sweep_detect_llama).
 #   2  TAUS          comma-separated absolute detect-tau values
 #                    (default: "-8,-4,0,4,8,12,16")
-#   3  N_JAILBREAK   number of jailbreak prompts (default: 50)
-#   4  N_BENIGN      number of benign prompts (default: 50)
+#   3  N_JAILBREAK   number of jailbreak prompts (default: 5)
+#   4  N_BENIGN      number of benign prompts (default: 5)
 #   5  RECLASSIFY    yes (default) or no -- judge each tau-dir after the sweep
 #   6  WARMUP        explicit warmup.pt path. Empty (default) -> the Python
 #                    script uses warmupaxes/<model>_warmup.pt and computes
@@ -44,19 +45,26 @@ export HF_HUB_ENABLE_HF_TRANSFER=1
 # Optional: paste a key here for unattended runs (only used by reclassify).
 ANTHROPIC_API_KEY_OVERRIDE=""
 
-if [ -z "$1" ]; then
-    echo "Usage: $0 <output-dir> [taus] [n_jb] [n_bn] [reclassify] [warmup] [model]" >&2
-    exit 2
-fi
-
-OUTPUT_DIR="$1"
+OUTPUT_DIR="${1:-}"
 TAUS_RAW="${2:-default}"
-N_JB="${3:-50}"
-N_BN="${4:-50}"
+N_JB="${3:-5}"
+N_BN="${4:-5}"
 RECLASSIFY="${5:-yes}"
 WARMUP="${6:-}"
 MODEL="${7:-meta-llama/Llama-3.3-70B-Instruct}"
 MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-256}"
+
+# Default output dir: derive a short label from the model so re-runs with
+# different models don't clobber each other. Falls back to a generic name
+# if neither known model family appears in the id.
+if [ -z "$OUTPUT_DIR" ]; then
+    case "$(echo "$MODEL" | tr '[:upper:]' '[:lower:]')" in
+        *llama*) OUTPUT_DIR="sweep_detect_llama" ;;
+        *qwen*)  OUTPUT_DIR="sweep_detect_qwen" ;;
+        *gemma*) OUTPUT_DIR="sweep_detect_gemma" ;;
+        *)       OUTPUT_DIR="sweep_detect_results" ;;
+    esac
+fi
 
 if [ "$TAUS_RAW" = "default" ]; then
     TAUS="-8,-4,0,4,8,12,16"
@@ -140,7 +148,7 @@ fi
 LOG="${OUTPUT_DIR%/}/sweep_$(date +%Y-%m-%dT%H-%M-%S).log"
 
 python sweep_detect_thresholds.py \
-    --taus "$TAUS" \
+    --taus="$TAUS" \
     --output-dir "$OUTPUT_DIR" \
     --n-jailbreak "$N_JB" \
     --n-benign "$N_BN" \
