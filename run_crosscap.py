@@ -1215,11 +1215,23 @@ def _compute_warmup_state(exp, cfg) -> dict:
         assistant_axes, cap_layers,
         method=cross_detect_method,
     )
-    # At override layers, the compute_cross_detect_thresholds output is on
+    # When --cross-detect-method is a literal number the user is
+    # explicitly fixing the gate value across every cap layer (e.g. for
+    # detection-capability sweeps). In that case we must NOT clobber
+    # their choice with +inf at the extra layers -- a low literal tau
+    # would otherwise still fire on every benign prompt at L<paper_lo>.
+    try:
+        float(cross_detect_method)
+        is_literal_detect = True
+    except (TypeError, ValueError):
+        is_literal_detect = False
+
+    # At override layers the compute_cross_detect_thresholds output is on
     # the compliance axis (the placeholder we substituted) and meaningless
-    # as a detect threshold. Replace with +inf so the gate always opens; the
-    # cross-cap fires solely on the compliance correction at those layers.
-    if override is not None:
+    # as a detect threshold. For percentile methods, replace with +inf so
+    # the gate always opens; the cross-cap fires solely on the compliance
+    # correction at those layers. Skip this fallback for literal taus.
+    if override is not None and not is_literal_detect:
         for li in cap_layers:
             if li not in paper_cap_layers:
                 cross_detect_taus[li] = float("inf")
@@ -1229,7 +1241,11 @@ def _compute_warmup_state(exp, cfg) -> dict:
         paper_tau = assistant_taus[li]
         new_tau = cross_detect_taus[li]
         is_extra = override is not None and li not in paper_cap_layers
-        marker = "  [override: detect always passes]" if is_extra else ""
+        if is_extra:
+            marker = ("  [override: literal tau applied]" if is_literal_detect
+                      else "  [override: detect always passes]")
+        else:
+            marker = ""
         paper_str = "+inf" if paper_tau == float("inf") else f"{paper_tau:.2f}"
         new_str = "+inf" if new_tau == float("inf") else f"{new_tau:.2f}"
         print(
