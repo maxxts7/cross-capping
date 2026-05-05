@@ -57,7 +57,7 @@ RECLASSIFY="${4:-yes}"
 AXIS_METHOD="${5:-pca}"
 # Default cross-cap (Mode 3) range is L40-L70 -- wider than the paper's L56-L71.
 # Pass "" as the 6th arg to fall back to the paper's published range.
-COMPLIANCE_LAYERS="${6-40-70}"
+COMPLIANCE_LAYERS="${6-40-65}"
 MODEL="meta-llama/Llama-3.3-70B-Instruct"
 LAYER_TAG=""
 if [ -n "$COMPLIANCE_LAYERS" ]; then
