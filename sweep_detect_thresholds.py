@@ -58,6 +58,9 @@ from pathlib import Path
 import pandas as pd
 import torch
 
+from huggingface_hub import snapshot_download
+from huggingface_hub.errors import LocalEntryNotFoundError
+
 from crosscap_experiment import (
     SteeringExperiment,
     generate_baseline,
@@ -105,6 +108,64 @@ def _tau_dirname(tau: float) -> str:
     stay readable on Windows (no funny shell interpretation either)."""
     s = f"{tau:+.3f}".rstrip("0").rstrip(".")
     return f"tau_{s.replace('.', 'p')}"
+
+
+def _model_already_cached(model_name: str) -> Path | None:
+    """Return the local snapshot path if every weight file the model
+    needs is already on disk; None otherwise.
+
+    Uses snapshot_download(local_files_only=True) -- the same mechanism
+    from_pretrained relies on, so a positive answer here guarantees the
+    subsequent load is a pure-disk op. We deliberately ignore the same
+    .bin/.pth artifacts as crosscap_experiment so the safetensors-only
+    cache produced by run_llama.sh isn't reported incomplete just
+    because the alternate-format weights are missing."""
+    try:
+        path = snapshot_download(
+            repo_id=model_name,
+            local_files_only=True,
+            ignore_patterns=["*.bin", "*.bin.index.json", "*.pth", "*.pt"],
+        )
+        return Path(path)
+    except (LocalEntryNotFoundError, FileNotFoundError):
+        return None
+    except Exception:
+        # Be conservative: any other failure (e.g. corrupted cache index)
+        # falls through to the full download path so the user gets the
+        # same diagnostics they would have gotten before.
+        return None
+
+
+def _load_model(model_name: str) -> "SteeringExperiment":
+    """Instantiate SteeringExperiment, skipping preflight + download
+    monitor when the model is already on disk. Both helpers are noisy
+    (network probes + repeated cache-size prints) and only earn their
+    keep on first download; once the cache is populated they're pure
+    overhead."""
+    cached = _model_already_cached(model_name)
+    if cached is not None:
+        logger.info("Model %s already cached at %s -- skipping download monitor.",
+                    model_name, cached)
+        # Force from_pretrained off the network entirely so even the
+        # internal snapshot_download verification call inside
+        # SteeringExperiment.__init__ becomes a no-op disk lookup.
+        prev_offline = os.environ.get("HF_HUB_OFFLINE")
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        try:
+            return SteeringExperiment(model_name, axis_path=AXIS_PATH)
+        finally:
+            if prev_offline is None:
+                os.environ.pop("HF_HUB_OFFLINE", None)
+            else:
+                os.environ["HF_HUB_OFFLINE"] = prev_offline
+
+    logger.info("Model not fully cached; running preflight + download monitor.")
+    preflight_hf_access(model_name)
+    _monitor_stop = start_download_monitor(model_name)
+    try:
+        return SteeringExperiment(model_name, axis_path=AXIS_PATH)
+    finally:
+        _monitor_stop.set()
 
 
 def _model_slug(model_name: str) -> str:
@@ -223,16 +284,14 @@ def main():
     n_bn = sum(1 for p in prompts if p["type"] == "benign")
     logger.info("Loaded %d prompts: %d jailbreak, %d benign", len(prompts), n_jb, n_bn)
 
-    # 2. Load model. Preflight + monitor mirror run_crosscap so download
-    # behaviour stays identical. Needed before warmup compute (the
-    # compliance-axis build runs forward passes through the model).
+    # 2. Load model. _load_model first checks whether the HF cache
+    # already has every weight file -- if so it skips preflight +
+    # the download monitor and forces HF_HUB_OFFLINE=1 around the
+    # SteeringExperiment instantiation, so a fully-cached model
+    # never makes a network call. On a cache miss we fall back to
+    # the run_crosscap.py preflight + monitor path.
     print(f"Loading model: {args.model}")
-    preflight_hf_access(args.model)
-    _monitor_stop = start_download_monitor(args.model)
-    try:
-        exp = SteeringExperiment(args.model, axis_path=AXIS_PATH)
-    finally:
-        _monitor_stop.set()
+    exp = _load_model(args.model)
 
     # 3. Resolve warmup state: load existing or compute + persist a fresh
     # one to warmupaxes/.
