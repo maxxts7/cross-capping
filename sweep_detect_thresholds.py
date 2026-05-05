@@ -66,6 +66,11 @@ from crosscap_experiment import (
     generate_baseline,
     generate_cross_capped,
 )
+# Import the module itself, not just names: _compute_warmup_state reads
+# MODEL_NAME from run_crosscap's globals to know which assistant-axis
+# file to load. We override that global at runtime so the warmup uses
+# the same model the sweep loaded into `exp`.
+import run_crosscap
 from run_crosscap import (
     MODEL_NAME,
     AXIS_PATH,
@@ -218,7 +223,17 @@ def _load_or_compute_warmup(exp, args) -> tuple[dict, Path]:
 
     logger.info("No warmup at %s -- computing a fresh one (this takes a while)", warmup_path)
     cfg = _build_warmup_cfg(args)
-    state = _compute_warmup_state(exp, cfg)
+    # _compute_warmup_state reads run_crosscap.MODEL_NAME to pick the
+    # right assistant-axis file from HuggingFace. The module-level
+    # default is the Qwen path, so without this override we'd pair
+    # Qwen's 5120-dim axes with the Llama model's 8192-dim activations
+    # and crash on the first @ product.
+    prev_model = run_crosscap.MODEL_NAME
+    run_crosscap.MODEL_NAME = args.model
+    try:
+        state = _compute_warmup_state(exp, cfg)
+    finally:
+        run_crosscap.MODEL_NAME = prev_model
     warmup_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(state, warmup_path)
     logger.info("Saved fresh warmup to %s", warmup_path)
