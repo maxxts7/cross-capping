@@ -666,7 +666,32 @@ def build_prompts(cfg):
     return prompts
 
 
-def save_results(df, output_dir, args, cos_val, cfg, elapsed, cap_layers, cross_only=False):
+def _format_tau_dict(taus: dict[int, float] | None) -> str:
+    """Render a per-layer tau dict as a CSV-friendly string.
+
+    Scalar form (e.g. "-8.0") when every layer shares the same value --
+    by far the common case for literal taus and percentile methods on
+    Llama where projections are similar across cap layers. Per-layer form
+    ("L40=-8.00;L41=-8.00;...;L56=+inf") when values differ, so the +inf
+    extras in --compliance-layers mode stay visible.
+    """
+    if not taus:
+        return ""
+    values = list(taus.values())
+    first = values[0]
+    if all(v == first for v in values):
+        return "+inf" if first == float("inf") else f"{float(first):g}"
+    parts = []
+    for li in sorted(taus):
+        v = taus[li]
+        parts.append(f"L{li}={'+inf' if v == float('inf') else f'{float(v):.4g}'}")
+    return ";".join(parts)
+
+
+def save_results(
+    df, output_dir, args, cos_val, cfg, elapsed, cap_layers, cross_only=False,
+    assistant_taus=None, compliance_taus=None, cross_detect_taus=None,
+):
     """Split the combined results DataFrame into 4 separate CSVs
     (one per capping method x prompt type) and write a metadata.json
     with the experiment configuration.
@@ -678,8 +703,18 @@ def save_results(df, output_dir, args, cos_val, cfg, elapsed, cap_layers, cross_
       cross_cap_benign.csv          -- cross-axis capped, benign prompts
 
     (If cross_only=True, the assistant_cap files are skipped.)
+
+    The tau dicts are written into each CSV as new columns so a row is
+    self-describing -- you can concat CSVs from different runs and still
+    know which thresholds were active.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Pre-format the tau strings once so every row in a given run shares
+    # the same value (cheaper + makes diff-style comparisons obvious).
+    tau_assistant_str = _format_tau_dict(assistant_taus)
+    tau_correct_str   = _format_tau_dict(compliance_taus)
+    tau_detect_str    = _format_tau_dict(cross_detect_taus)
 
     # Split by prompt type
     jb = df[df["prompt_type"] == "jailbreak"]
@@ -691,8 +726,14 @@ def save_results(df, output_dir, args, cos_val, cfg, elapsed, cap_layers, cross_
         out["correction_applied"] = subset[f"{method}_cap_applied"]   # Yes/No
         out["layers"] = subset[f"{method}_cap_layers"]                 # e.g. "L46,L47,L48"
         out["capped_text"] = subset[f"{method}_cap_text"]              # the actual output text
-        # Cross-cap tracks per-layer push magnitudes; assistant-cap doesn't.
-        if method == "cross":
+        # Tau columns: assistant_cap uses paper's assistant tau; cross_cap
+        # uses both the detect gate tau and the compliance correction tau.
+        if method == "assistant":
+            out["tau_assistant"] = tau_assistant_str
+        else:  # cross
+            out["tau_detect"]  = tau_detect_str
+            out["tau_correct"] = tau_correct_str
+            # Cross-cap tracks per-layer push magnitudes; assistant-cap doesn't.
             out["fires_per_layer"] = subset["cross_cap_fires_per_layer"]
             out["push_trace"]      = subset["cross_cap_push_trace"]
         out.to_csv(path, index=False)
@@ -1447,7 +1488,13 @@ def do_merge(args, cfg, output_dir):
 
     # Split into the 4 final CSVs and save metadata
     cross_only = cfg.get("CROSS_ONLY", False)
-    save_results(df, output_dir, args, cos_val, cfg, elapsed=0, cap_layers=cap_layers, cross_only=cross_only)
+    save_results(
+        df, output_dir, args, cos_val, cfg, elapsed=0,
+        cap_layers=cap_layers, cross_only=cross_only,
+        assistant_taus=state.get("assistant_taus"),
+        compliance_taus=state.get("compliance_taus"),
+        cross_detect_taus=state.get("cross_detect_taus"),
+    )
 
     # Merge per-chunk diagnostic traces into a single gen_trace.pt
     trace_files = sorted(
@@ -1512,6 +1559,9 @@ def do_run(args, cfg, output_dir):
     save_results(
         df, output_dir, args, state["cos_similarity"], cfg, elapsed,
         cap_layers=state["cap_layers"], cross_only=cross_only,
+        assistant_taus=state["assistant_taus"],
+        compliance_taus=state["compliance_taus"],
+        cross_detect_taus=state["cross_detect_taus"],
     )
 
     # Save per-token diagnostic trace alongside the CSV outputs.
