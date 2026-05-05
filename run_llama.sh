@@ -26,6 +26,8 @@
 #   ./run_llama.sh full 16                                    # literal tau=16, default L40-L70
 #   ./run_llama.sh full optimal75 benign-p1 yes pca ""        # fall back to paper L56-L71 only
 #   ./run_llama.sh full optimal75 benign-p1 yes pca 30-70     # different override range
+#   ./run_llama.sh full optimal75 benign-p1 yes pca 40-65 50 50  # 50 jailbreak + 50 benign
+#   ./run_llama.sh full optimal75 4 yes pca 40-65 5 5         # smoke test, literal detect tau
 #
 # Compliance threshold options:  optimal75 (default), optimal, optimal90, optimal20, mean+std, mean, p25,
 #                                 OR a literal number (e.g. 16) -> used as tau on every cap layer
@@ -36,6 +38,9 @@
 # Compliance-layer override:     default "40-70" inclusive -- Mode 3 cross-cap extends down to L40
 #                                 (Mode 2 assistant-cap stays on the paper's L56-L71). Pass "" to
 #                                 disable the override and use paper L56-L71 for both modes.
+# N-jailbreak / N-benign:        positional 7 and 8. Empty (default) = use the preset value.
+#                                 Set either to override just the prompt counts without changing
+#                                 the preset (e.g. preset=full but only 5+5 prompts for a smoke run).
 
 set -e
 
@@ -58,12 +63,21 @@ AXIS_METHOD="${5:-pca}"
 # Default cross-cap (Mode 3) range is L40-L70 -- wider than the paper's L56-L71.
 # Pass "" as the 6th arg to fall back to the paper's published range.
 COMPLIANCE_LAYERS="${6-40-65}"
+# Optional prompt-count overrides. Empty = use the preset's N_PROMPTS /
+# N_BENIGN_EVAL. Useful for ad-hoc subsamples without editing the preset.
+N_JAILBREAK="${7:-}"
+N_BENIGN="${8:-}"
 MODEL="meta-llama/Llama-3.3-70B-Instruct"
 LAYER_TAG=""
 if [ -n "$COMPLIANCE_LAYERS" ]; then
     LAYER_TAG="_L${COMPLIANCE_LAYERS}"
 fi
-OUTPUT_DIR="results/crosscap_llama_${PRESET}_${THRESHOLD}_${CROSS_DETECT}_${AXIS_METHOD}${LAYER_TAG}"
+COUNT_TAG=""
+if [ -n "$N_JAILBREAK" ] || [ -n "$N_BENIGN" ]; then
+    # Mark the output dir so a 5+5 smoke run doesn't overwrite a 250+100 full run.
+    COUNT_TAG="_n${N_JAILBREAK:-preset}-${N_BENIGN:-preset}"
+fi
+OUTPUT_DIR="results/crosscap_llama_${PRESET}_${THRESHOLD}_${CROSS_DETECT}_${AXIS_METHOD}${LAYER_TAG}${COUNT_TAG}"
 
 # API key resolution for the reclassify step. Captured upfront so the long
 # generation can run unattended; benign reclassify needs it at the end.
@@ -114,6 +128,8 @@ echo "  Compliance layers:    ${COMPLIANCE_LAYERS:-paper default (L56-L71)}"
 if [ -n "$COMPLIANCE_LAYERS" ]; then
     echo "  Mode 2 (assistant-cap): runs on paper layers (L56-L71); cross-cap (Mode 3) on the override range"
 fi
+echo "  N jailbreak:          ${N_JAILBREAK:-preset default}"
+echo "  N benign:             ${N_BENIGN:-preset default}"
 echo "  Calibration:          ${CALIB_INFO}"
 echo "  Reclassify:           ${RECLASSIFY}"
 echo "  Anthropic key:        ${KEY_INFO}"
@@ -124,6 +140,12 @@ echo ""
 EXTRA_ARGS=()
 if [ -n "$COMPLIANCE_LAYERS" ]; then
     EXTRA_ARGS+=(--compliance-layers "$COMPLIANCE_LAYERS")
+fi
+if [ -n "$N_JAILBREAK" ]; then
+    EXTRA_ARGS+=(--n-jailbreak "$N_JAILBREAK")
+fi
+if [ -n "$N_BENIGN" ]; then
+    EXTRA_ARGS+=(--n-benign "$N_BENIGN")
 fi
 
 python run_crosscap.py \

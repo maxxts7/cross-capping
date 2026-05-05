@@ -1540,6 +1540,10 @@ def main():
         cfg["AXIS_METHOD"] = args.axis_method           # override preset's AXIS_METHOD
     if args.n_detect_cal is not None:
         cfg["N_DETECT_CAL"] = args.n_detect_cal
+    if args.n_jailbreak is not None:
+        cfg["N_PROMPTS"] = args.n_jailbreak
+    if args.n_benign is not None:
+        cfg["N_BENIGN_EVAL"] = args.n_benign
     if args.compliance_layers:
         lo, hi = map(int, args.compliance_layers.split("-"))
         if lo > hi:
@@ -1558,6 +1562,7 @@ def main():
 
     print(f"Preset: {args.preset}")
     print(f"Model: {MODEL_NAME}")
+    print(f"Prompts: {cfg['N_PROMPTS']} jailbreak + {cfg['N_BENIGN_EVAL']} benign")
     print(f"Compliance threshold: {args.compliance_threshold}")
     print(f"Cross-cap detect method: {args.cross_detect_method}  "
           f"(n_detect_cal={cfg['N_DETECT_CAL']})")
@@ -1677,6 +1682,18 @@ def parse_args():
         help="Override N_DETECT_CAL from the preset. Number of benign "
              "CALIBRATION_PROMPTS used for cross-detect-tau calibration. "
              "Clamped to len(CALIBRATION_PROMPTS).",
+    )
+    parser.add_argument(
+        "--n-jailbreak", type=int, default=None,
+        help="Override N_PROMPTS from the preset. Number of jailbreak prompts "
+             "to evaluate. Default None = use the preset value (e.g. full=250, "
+             "small=20, sanity=10).",
+    )
+    parser.add_argument(
+        "--n-benign", type=int, default=None,
+        help="Override N_BENIGN_EVAL from the preset. Number of benign eval "
+             "prompts (AlpacaEval) to evaluate. Default None = use the preset "
+             "value (e.g. full=100, small=50, sanity=10).",
     )
     return parser.parse_args()
 
