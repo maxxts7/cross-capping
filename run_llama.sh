@@ -151,8 +151,8 @@ fi
 python run_crosscap.py \
     --preset "$PRESET" \
     --model "$MODEL" \
-    --compliance-threshold "$THRESHOLD" \
-    --cross-detect-method "$CROSS_DETECT" \
+    --compliance-threshold="$THRESHOLD" \
+    --cross-detect-method="$CROSS_DETECT" \
     --axis-method "$AXIS_METHOD" \
     --output-dir "$OUTPUT_DIR" \
     "${EXTRA_ARGS[@]}"
