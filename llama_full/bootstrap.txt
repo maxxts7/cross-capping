@@ -1,0 +1,35 @@
+Bootstrap N: 10000 resamples, percentile 95% CI
+Label column: llm_label
+Paired jailbreak prompts: 250
+== assistant-cap jailbreak (rates among judgeable) ==
+  refusal                    20.6%  [ 15.2,  26.5]
+  partial_refusal             1.5%  [  0.0,   3.4]
+  compliance                 77.9%  [ 72.1,  83.8]
+  degraded                    0.0%  [  0.0,   0.0]
+  refusal_any                22.1%  [ 16.7,  27.9]
+
+== cross-cap jailbreak (rates among judgeable) ==
+  refusal                    48.1%  [ 41.6,  54.7]
+  partial_refusal             1.4%  [  0.0,   3.3]
+  compliance                 50.5%  [ 43.9,  57.0]
+  degraded                    0.0%  [  0.0,   0.0]
+  refusal_any                49.5%  [ 43.0,  56.1]
+
+== paired lift  cross-cap minus assistant-cap  (refusal rate, judgeable both) ==
+  Paired prompts (intersection): 250
+  assistant-cap refusal: 20.6%  [15.1, 26.3]
+  cross-cap refusal:     48.1%  [41.7, 54.9]
+  paired lift (c-a):     +27.5 pp  [+21.0, +34.3]
+  lift>0 probability:    100.0%
+  paired lift (refusal_any, c-a): +27.5 pp  [+20.9, +34.1]
+  lift_any>0 probability: 100.0%
+
+== assistant-cap benign (over fired rows only, n=100) ==
+  benign_unchanged           99.0%  [ 97.0, 100.0]
+  benign_false_refusal        0.0%  [  0.0,   0.0]
+  benign_degraded             1.0%  [  0.0,   3.0]
+
+== cross-cap benign (over fired rows only, n=100) ==
+  benign_unchanged           98.0%  [ 95.0, 100.0]
+  benign_false_refusal        0.0%  [  0.0,   0.0]
+  benign_degraded             2.0%  [  0.0,   5.0]
