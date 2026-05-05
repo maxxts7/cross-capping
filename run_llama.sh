@@ -29,7 +29,8 @@
 #
 # Compliance threshold options:  optimal75 (default), optimal, optimal90, optimal20, mean+std, mean, p25,
 #                                 OR a literal number (e.g. 16) -> used as tau on every cap layer
-# Cross-detect method options:   benign-p1 (default), benign-p5, benign-p10
+# Cross-detect method options:   benign-p1 (default), benign-p5, benign-p10,
+#                                 OR a literal number (e.g. 4) -> used as tau on every cap layer
 # Reclassify options:            yes (default), no
 # Axis method options:           pca (default), mean_diff
 # Compliance-layer override:     default "40-70" inclusive -- Mode 3 cross-cap extends down to L40

@@ -754,13 +754,16 @@ def compute_cross_detect_thresholds(
     Detection fires when (h_last @ v_assist) < tau. Lower tau = fires less
     often (less aggressive), which is the point of tuning this cutoff.
 
-    Methods (all data-driven on YOUR prompts):
+    Methods:
       - "benign-p1":  tau = 1st percentile of benign projections
                       (<=1% benign FP; most selective gate; default)
       - "benign-p5":  tau = 5th percentile of benign projections
                       (<=5% benign FP by construction)
       - "benign-p10": 10th percentile of benign projections
                       (<=10% benign FP; most permissive gate)
+      - literal float (e.g. "4" or "-2.5"): used verbatim as tau on every
+                      cap layer. Mirrors the literal mode of
+                      _compliance_tau, useful for hand-tuned sweeps.
 
     Returns:
         taus:  {layer_idx -> tau (float)}
@@ -769,6 +772,15 @@ def compute_cross_detect_thresholds(
             "p1_benign", "p5_benign", "p10_benign",
         }}
     """
+    # Literal-tau short-circuit. We still run the calibration loop so
+    # stats (mean/std/percentiles) populate the returned dict for
+    # logging + diagnostics, even though the chosen tau ignores them.
+    literal_tau: float | None = None
+    try:
+        literal_tau = float(method)
+    except (TypeError, ValueError):
+        pass
+
     logger.info(
         "Computing cross-cap detection thresholds on assistant axis at "
         "L%d-L%d (%d benign, method=%s)...",
@@ -798,7 +810,9 @@ def compute_cross_detect_thresholds(
             "p5_benign":   p5_b,
             "p10_benign":  p10_b,
         }
-        if method == "benign-p1":
+        if literal_tau is not None:
+            taus[li] = literal_tau
+        elif method == "benign-p1":
             taus[li] = p1_b
         elif method == "benign-p5":
             taus[li] = p5_b
@@ -807,7 +821,8 @@ def compute_cross_detect_thresholds(
         else:
             raise ValueError(
                 f"Unknown cross-detect method: {method!r} "
-                "(expected benign-p1, benign-p5, or benign-p10)"
+                "(expected benign-p1, benign-p5, benign-p10, or a literal "
+                "number like '4' or '-2.5')"
             )
 
     for li in [cap_layers[0], cap_layers[-1]]:
